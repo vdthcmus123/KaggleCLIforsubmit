@@ -54,6 +54,7 @@ top_n = 100
 sort_by = "scoreDescending"
 file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
+max_submit_attempts_per_run = 1
 max_submissions_per_day = 2
 ```
 
@@ -115,6 +116,7 @@ Before pushing, the main values to review are:
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
 - `max_submissions_per_run = 1` - submit at most one new file each run
+- `max_submit_attempts_per_run = 1` - stop after one Kaggle submit attempt, even if Kaggle rejects it
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
 
 Scheduled runs submit automatically because this Biohub config has

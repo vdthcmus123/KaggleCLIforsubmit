@@ -36,6 +36,7 @@ class Defaults:
     file_pattern: str = r"(?i).*submission.*\.csv$"
     required_columns: tuple[str, ...] | None = None
     max_submissions_per_run: int = 1
+    max_submit_attempts_per_run: int = 1
     max_submissions_per_day: int = 2
     message_template: str = "AUTO public kernel {kernel_ref} file {file_name}"
 
@@ -53,6 +54,7 @@ class Competition:
     file_pattern: str
     required_columns: tuple[str, ...] | None
     max_submissions_per_run: int
+    max_submit_attempts_per_run: int
     max_submissions_per_day: int
     message_template: str
     search: str | None = None
@@ -83,6 +85,12 @@ def load_config(path: Path) -> list[Competition]:
         max_submissions_per_run=int(
             defaults_raw.get(
                 "max_submissions_per_run", Defaults.max_submissions_per_run
+            )
+        ),
+        max_submit_attempts_per_run=int(
+            defaults_raw.get(
+                "max_submit_attempts_per_run",
+                Defaults.max_submit_attempts_per_run,
             )
         ),
         max_submissions_per_day=int(
@@ -118,6 +126,12 @@ def load_config(path: Path) -> list[Competition]:
                     item.get(
                         "max_submissions_per_run",
                         defaults.max_submissions_per_run,
+                    )
+                ),
+                max_submit_attempts_per_run=int(
+                    item.get(
+                        "max_submit_attempts_per_run",
+                        defaults.max_submit_attempts_per_run,
                     )
                 ),
                 max_submissions_per_day=int(
@@ -400,6 +414,16 @@ def submit_file(comp: Competition, kernel: str, file_path: Path, message: str) -
     run_cmd(args, capture=True)
 
 
+def error_text(exc: Exception) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        return cmd_error(exc)
+    return str(exc)
+
+
+def is_rate_limited_error(text: str) -> bool:
+    return "429" in text or "Too Many Requests" in text
+
+
 def make_message(comp: Competition, kernel: str, file_name: str, sha256: str) -> str:
     message = comp.message_template.format(
         competition=comp.slug,
@@ -460,6 +484,8 @@ def process_competition(
     already_today = submissions_today(state, comp.slug, now)
     remaining_today = max(comp.max_submissions_per_day - already_today, 0)
     remaining_run = min(comp.max_submissions_per_run, remaining_today)
+    remaining_attempts = max(comp.max_submit_attempts_per_run, 0)
+    rate_limited = False
 
     kernels = list_kernels(comp)
     report["kernels_seen"] = len(kernels)
@@ -467,6 +493,9 @@ def process_competition(
     for row in kernels:
         if remaining_run <= 0 and submit:
             report["skipped"].append("submission limit reached")
+            break
+        if remaining_attempts <= 0 and submit:
+            report["skipped"].append("submit attempt limit reached")
             break
 
         ref = kernel_ref(row)
@@ -477,7 +506,12 @@ def process_competition(
         try:
             files = list_kernel_files(ref)
         except subprocess.CalledProcessError as exc:
-            report["errors"].append({"kernel": ref, "error": cmd_error(exc)})
+            err = cmd_error(exc)
+            report["errors"].append({"kernel": ref, "error": err})
+            if is_rate_limited_error(err):
+                rate_limited = True
+                report["skipped"].append("Kaggle API rate limit reached")
+                break
             continue
 
         names = [name for name in (output_file_name(item) for item in files) if name]
@@ -511,6 +545,7 @@ def process_competition(
                     continue
                 file_hash = sha256_file(selected)
                 message = make_message(comp, ref, Path(file_name).name, file_hash)
+                remaining_attempts -= 1
                 submit_file(comp, ref, selected, message)
                 record = {
                     "competition": comp.slug,
@@ -524,10 +559,15 @@ def process_competition(
                 report["submitted"].append(record)
                 remaining_run -= 1
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
-                report["errors"].append({"kernel": ref, "file": file_name, "error": str(exc)})
+                err = error_text(exc)
+                report["errors"].append({"kernel": ref, "file": file_name, "error": err})
+                if is_rate_limited_error(err):
+                    rate_limited = True
 
-            if remaining_run <= 0:
+            if remaining_run <= 0 or remaining_attempts <= 0 or rate_limited:
                 break
+        if rate_limited:
+            break
 
     return report
 
