@@ -107,14 +107,14 @@ This copy already includes `config.toml` for:
 ```toml
 slug = "biohub-cell-tracking-during-development"
 enabled = true
-auto_submit = true
+auto_submit = false
 ```
 
 Before pushing, the main values to review are:
 
 - `sort_by = "scoreDescending"` - scan public kernels from highest score downward
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
-- `code_competition = true` - submit the selected notebook/kernel instead of uploading the CSV directly
+- `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
@@ -122,9 +122,17 @@ Before pushing, the main values to review are:
 - `max_submit_attempts_per_run = 1` - stop after one Kaggle submit attempt, even if Kaggle rejects it
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
 
-Scheduled runs submit automatically because this Biohub config has
-`auto_submit = true`. To pause real submissions without disabling the workflow,
-change `auto_submit = false`.
+For Biohub, Kaggle will not let one account submit another user's notebook
+session. First copy/fork the selected public notebook into your Kaggle account,
+run it, then set:
+
+```toml
+submit_kernel = "your-kaggle-username/your-forked-notebook-slug"
+submit_kernel_version = "1"
+auto_submit = true
+```
+
+Until those values are set, scheduled runs are paused with `auto_submit = false`.
 
 ## Notes
 

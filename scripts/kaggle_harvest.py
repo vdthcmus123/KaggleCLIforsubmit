@@ -303,15 +303,24 @@ def output_file_name(row: dict[str, Any]) -> str | None:
 
 
 def already_submitted(
-    state: dict[str, Any], competition: str, kernel: str, file_name: str
+    state: dict[str, Any],
+    competition: str,
+    kernel: str,
+    file_name: str,
+    kernel_version: str | None = None,
 ) -> bool:
     for sub in state.get("submissions", []):
-        if (
-            sub.get("competition") == competition
-            and sub.get("kernel_ref") == kernel
-            and sub.get("file_name") == file_name
+        if sub.get("competition") != competition:
+            continue
+        if sub.get("kernel_ref") != kernel:
+            continue
+        if sub.get("file_name") != file_name:
+            continue
+        if kernel_version is not None and str(sub.get("kernel_version", "")) != str(
+            kernel_version
         ):
-            return True
+            continue
+        return True
     return False
 
 
@@ -399,18 +408,18 @@ def submit_file(comp: Competition, kernel: str, file_path: Path, message: str) -
 
         api.authenticate()
         if comp.code_competition:
-            submit_kernel = comp.submit_kernel or kernel
-            submit_kernel_version = (
-                int(comp.submit_kernel_version)
-                if comp.submit_kernel_version
-                else None
-            )
+            if not comp.submit_kernel or not comp.submit_kernel_version:
+                raise ValueError(
+                    f"{comp.slug} is a notebook-only competition. Copy/fork the "
+                    "selected notebook into your Kaggle account, then set "
+                    "submit_kernel and submit_kernel_version in config.toml."
+                )
             result = api.competition_submit_code(
                 Path(file_path).name,
                 message,
                 comp.slug,
-                submit_kernel,
-                submit_kernel_version,
+                comp.submit_kernel,
+                int(comp.submit_kernel_version),
                 quiet=True,
             )
         else:
@@ -486,6 +495,123 @@ def write_run_log(log_dir: Path, report: dict[str, Any]) -> None:
         fh.write("\n")
 
 
+def versioned_kernel_ref(kernel: str, version: str | None) -> str:
+    if not version:
+        return kernel
+    return f"{kernel}/{version}"
+
+
+def process_configured_code_submission(
+    comp: Competition,
+    *,
+    state: dict[str, Any],
+    output_dir: Path,
+    submit: bool,
+    now: datetime,
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    if not comp.submit_kernel:
+        raise ValueError("process_configured_code_submission requires submit_kernel")
+
+    if submit and not comp.submit_kernel_version:
+        report["errors"].append(
+            {
+                "kernel": comp.submit_kernel,
+                "error": (
+                    "code_competition=true requires submit_kernel_version. "
+                    "Run/copy the notebook on Kaggle, then set the version number."
+                ),
+            }
+        )
+        return report
+
+    pattern = re.compile(comp.file_pattern)
+    output_ref = versioned_kernel_ref(comp.submit_kernel, comp.submit_kernel_version)
+    report["kernels_seen"] = 1
+
+    already_today = submissions_today(state, comp.slug, now)
+    remaining_today = max(comp.max_submissions_per_day - already_today, 0)
+    remaining_run = min(comp.max_submissions_per_run, remaining_today)
+    remaining_attempts = max(comp.max_submit_attempts_per_run, 0)
+
+    if submit and remaining_run <= 0:
+        report["skipped"].append("submission limit reached")
+        return report
+    if submit and remaining_attempts <= 0:
+        report["skipped"].append("submit attempt limit reached")
+        return report
+
+    try:
+        files = list_kernel_files(output_ref)
+    except subprocess.CalledProcessError as exc:
+        report["errors"].append({"kernel": output_ref, "error": cmd_error(exc)})
+        return report
+
+    names = [name for name in (output_file_name(item) for item in files) if name]
+    matches = [name for name in names if pattern.search(Path(name).name)]
+    report["candidates"].append({"kernel": output_ref, "matching_files": matches})
+
+    if not matches:
+        report["skipped"].append(
+            f"configured submit_kernel has no file matching {comp.file_pattern}"
+        )
+        return report
+
+    for file_name in matches:
+        if already_submitted(
+            state,
+            comp.slug,
+            comp.submit_kernel,
+            file_name,
+            comp.submit_kernel_version,
+        ):
+            report["skipped"].append(f"already submitted {output_ref}:{file_name}")
+            continue
+
+        if not submit:
+            report["skipped"].append(
+                f"dry-run would submit owned notebook {output_ref}:{file_name}"
+            )
+            continue
+
+        try:
+            downloaded = download_output(comp, output_ref, output_dir)
+            selected = select_downloaded_file(downloaded, file_name)
+            if selected is None:
+                raise FileNotFoundError(f"Downloaded output did not contain {file_name}")
+            validation_errors = validate_submission_file(selected, comp.required_columns)
+            if validation_errors:
+                report["skipped"].append(
+                    "invalid submission format "
+                    f"{output_ref}:{file_name}: {'; '.join(validation_errors)}"
+                )
+                continue
+            file_hash = sha256_file(selected)
+            message = make_message(comp, comp.submit_kernel, Path(file_name).name, file_hash)
+            remaining_attempts -= 1
+            submit_file(comp, comp.submit_kernel, selected, message)
+            record = {
+                "competition": comp.slug,
+                "kernel_ref": comp.submit_kernel,
+                "kernel_version": comp.submit_kernel_version,
+                "file_name": file_name,
+                "sha256": file_hash,
+                "submitted_at_utc": utc_now().isoformat(),
+                "message": message,
+            }
+            state["submissions"].append(record)
+            report["submitted"].append(record)
+            remaining_run -= 1
+        except Exception as exc:  # noqa: BLE001 - keep the run moving.
+            err = error_text(exc)
+            report["errors"].append({"kernel": output_ref, "file": file_name, "error": err})
+
+        if remaining_run <= 0 or remaining_attempts <= 0:
+            break
+
+    return report
+
+
 def process_competition(
     comp: Competition,
     *,
@@ -512,6 +638,29 @@ def process_competition(
 
     if submit and not comp.auto_submit:
         report["skipped"].append("submit requested but auto_submit=false")
+        return report
+
+    if comp.code_competition and comp.submit_kernel:
+        return process_configured_code_submission(
+            comp,
+            state=state,
+            output_dir=output_dir,
+            submit=submit,
+            now=now,
+            report=report,
+        )
+
+    if submit and comp.code_competition and not comp.submit_kernel:
+        report["errors"].append(
+            {
+                "error": (
+                    "This competition only accepts notebook submissions, and Kaggle "
+                    "does not allow submitting someone else's notebook session. "
+                    "Copy/fork the selected public notebook into your Kaggle account, "
+                    "then set submit_kernel and submit_kernel_version in config.toml."
+                )
+            }
+        )
         return report
 
     pattern = re.compile(comp.file_pattern)
@@ -558,7 +707,12 @@ def process_competition(
                 continue
 
             if not submit:
-                report["skipped"].append(f"dry-run would submit {ref}:{file_name}")
+                if comp.code_competition:
+                    report["skipped"].append(
+                        f"dry-run found public notebook candidate to fork {ref}:{file_name}"
+                    )
+                else:
+                    report["skipped"].append(f"dry-run would submit {ref}:{file_name}")
                 continue
 
             try:
