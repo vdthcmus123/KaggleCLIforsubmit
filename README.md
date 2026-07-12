@@ -2,7 +2,9 @@
 
 A small GitHub Actions-friendly tool that scans public Kaggle kernels for one
 or more competitions, finds matching submission files, and optionally submits
-them with the Kaggle CLI.
+them with the Kaggle CLI/API. For notebook-only competitions, it can copy the
+selected public notebook into your Kaggle account, run that owned copy, and
+submit the resulting notebook version.
 
 The default mode is dry-run. Real submissions require both:
 
@@ -19,6 +21,7 @@ license expectations, and daily submission limits.
 - `.github/workflows/kaggle-harvest.yml` - scheduled/manual GitHub Actions workflow
 - `state/harvester-state.json` - tracked state, created by the tool after real submissions
 - `submissions/` - downloaded kernel outputs, ignored by git
+- `work/` - temporary pulled notebook source copies, ignored by git
 - `logs/` - local run logs, ignored by git and uploaded as workflow artifacts
 
 ## Local setup
@@ -107,7 +110,9 @@ This copy already includes `config.toml` for:
 ```toml
 slug = "biohub-cell-tracking-during-development"
 enabled = true
-auto_submit = false
+auto_submit = true
+code_competition = true
+auto_copy_notebook = true
 ```
 
 Before pushing, the main values to review are:
@@ -115,6 +120,8 @@ Before pushing, the main values to review are:
 - `sort_by = "scoreDescending"` - scan public kernels from highest score downward
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
+- `auto_copy_notebook = true` - pull the selected public notebook, push it as a private notebook under your Kaggle account, wait for it to finish, then submit that version
+- `notebook_wait_timeout_seconds = 21600` - wait up to 6 hours for the copied notebook run
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
@@ -123,22 +130,16 @@ Before pushing, the main values to review are:
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
 
 For Biohub, Kaggle will not let one account submit another user's notebook
-session. First copy/fork the selected public notebook into your Kaggle account,
-run it, then set:
-
-```toml
-submit_kernel = "your-kaggle-username/your-forked-notebook-slug"
-submit_kernel_version = "1"
-auto_submit = true
-```
-
-Until those values are set, scheduled runs are paused with `auto_submit = false`.
+session directly. The workflow avoids that permission error by creating a fresh
+private notebook copy in the Kaggle account represented by `KAGGLE_API_TOKEN`,
+then submitting the returned kernel version number.
 
 ## Notes
 
 - The tool does not decide whether a public kernel is allowed by a competition.
   Read the competition rules before enabling real submit.
-- The state file prevents repeat submissions from the same kernel/file pair.
+- The state file records previous submissions. For copied notebook submissions,
+  each pushed Kaggle notebook version is tracked separately.
 - `scoreDescending` follows Kaggle's kernel-list score order. For competitions
   where a lower metric is better, change this to `scoreAscending`.
 - If another competition accepts `.zip` submissions, change `file_pattern` and

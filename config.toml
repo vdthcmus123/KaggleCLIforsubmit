@@ -13,16 +13,16 @@ message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
 [[competitions]]
 slug = "biohub-cell-tracking-during-development"
 enabled = true
-auto_submit = false
+auto_submit = true
 top_n = 100
 sort_by = "scoreDescending"
 kernel_type = "notebook"
 file_pattern = "(?i).*submission.*\\.csv$"
 code_competition = true
-# Copy/fork the selected public notebook into your Kaggle account, run it, then
-# fill these two values and set auto_submit=true.
-# submit_kernel = "your-kaggle-username/your-forked-notebook-slug"
-# submit_kernel_version = "1"
+auto_copy_notebook = true
+copy_slug_prefix = "auto"
+notebook_wait_timeout_seconds = 21600
+notebook_poll_seconds = 60
 required_columns = [
   "id",
   "dataset",

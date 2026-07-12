@@ -13,9 +13,11 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import shlex
 import subprocess
 import sys
+import time
 import tomllib
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -39,6 +41,12 @@ class Defaults:
     max_submit_attempts_per_run: int = 1
     max_submissions_per_day: int = 2
     message_template: str = "AUTO public kernel {kernel_ref} file {file_name}"
+    code_competition: bool = False
+    auto_copy_notebook: bool = False
+    copy_slug_prefix: str = "auto"
+    notebook_wait_timeout_seconds: int = 21600
+    notebook_poll_seconds: int = 60
+    kernel_session_timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +67,11 @@ class Competition:
     message_template: str
     search: str | None = None
     code_competition: bool = False
+    auto_copy_notebook: bool = False
+    copy_slug_prefix: str = "auto"
+    notebook_wait_timeout_seconds: int = 21600
+    notebook_poll_seconds: int = 60
+    kernel_session_timeout_seconds: int | None = None
     submit_kernel: str | None = None
     submit_kernel_version: str | None = None
 
@@ -100,6 +113,33 @@ def load_config(path: Path) -> list[Competition]:
         ),
         message_template=str(
             defaults_raw.get("message_template", Defaults.message_template)
+        ),
+        code_competition=bool(
+            defaults_raw.get("code_competition", Defaults.code_competition)
+        ),
+        auto_copy_notebook=bool(
+            defaults_raw.get("auto_copy_notebook", Defaults.auto_copy_notebook)
+        ),
+        copy_slug_prefix=str(
+            defaults_raw.get("copy_slug_prefix", Defaults.copy_slug_prefix)
+        ),
+        notebook_wait_timeout_seconds=int(
+            defaults_raw.get(
+                "notebook_wait_timeout_seconds",
+                Defaults.notebook_wait_timeout_seconds,
+            )
+        ),
+        notebook_poll_seconds=int(
+            defaults_raw.get(
+                "notebook_poll_seconds",
+                Defaults.notebook_poll_seconds,
+            )
+        ),
+        kernel_session_timeout_seconds=maybe_int(
+            defaults_raw.get(
+                "kernel_session_timeout_seconds",
+                Defaults.kernel_session_timeout_seconds,
+            )
         ),
     )
 
@@ -144,7 +184,30 @@ def load_config(path: Path) -> list[Competition]:
                     item.get("message_template", defaults.message_template)
                 ),
                 search=maybe_str(item.get("search")),
-                code_competition=bool(item.get("code_competition", False)),
+                code_competition=bool(
+                    item.get("code_competition", defaults.code_competition)
+                ),
+                auto_copy_notebook=bool(
+                    item.get("auto_copy_notebook", defaults.auto_copy_notebook)
+                ),
+                copy_slug_prefix=str(
+                    item.get("copy_slug_prefix", defaults.copy_slug_prefix)
+                ),
+                notebook_wait_timeout_seconds=int(
+                    item.get(
+                        "notebook_wait_timeout_seconds",
+                        defaults.notebook_wait_timeout_seconds,
+                    )
+                ),
+                notebook_poll_seconds=int(
+                    item.get("notebook_poll_seconds", defaults.notebook_poll_seconds)
+                ),
+                kernel_session_timeout_seconds=maybe_int(
+                    item.get(
+                        "kernel_session_timeout_seconds",
+                        defaults.kernel_session_timeout_seconds,
+                    )
+                ),
                 submit_kernel=maybe_str(item.get("submit_kernel")),
                 submit_kernel_version=maybe_str(item.get("submit_kernel_version")),
             )
@@ -157,6 +220,13 @@ def maybe_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def maybe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return int(text) if text else None
 
 
 def maybe_str_list(value: Any) -> tuple[str, ...] | None:
@@ -402,24 +472,32 @@ def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]
     return find_downloaded_files(target, re.compile(comp.file_pattern))
 
 
-def submit_file(comp: Competition, kernel: str, file_path: Path, message: str) -> None:
+def submit_file(
+    comp: Competition,
+    kernel: str,
+    file_path: Path,
+    message: str,
+    *,
+    kernel_version: str | None = None,
+) -> None:
     try:
         from kaggle import api  # type: ignore[import-not-found]
 
         api.authenticate()
         if comp.code_competition:
-            if not comp.submit_kernel or not comp.submit_kernel_version:
+            submit_kernel = comp.submit_kernel or kernel
+            submit_kernel_version = comp.submit_kernel_version or kernel_version
+            if not submit_kernel or not submit_kernel_version:
                 raise ValueError(
-                    f"{comp.slug} is a notebook-only competition. Copy/fork the "
-                    "selected notebook into your Kaggle account, then set "
-                    "submit_kernel and submit_kernel_version in config.toml."
+                    f"{comp.slug} is a notebook-only competition. Submit needs "
+                    "an owned Kaggle notebook ref and version."
                 )
             result = api.competition_submit_code(
                 Path(file_path).name,
                 message,
                 comp.slug,
-                comp.submit_kernel,
-                int(comp.submit_kernel_version),
+                submit_kernel,
+                int(submit_kernel_version),
                 quiet=True,
             )
         else:
@@ -476,6 +554,172 @@ def make_message(comp: Competition, kernel: str, file_name: str, sha256: str) ->
         short_sha=sha256[:12],
     )
     return message[:200]
+
+
+def slugify_text(text: str, *, max_len: int = 50) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    slug = re.sub(r"-+", "-", slug)
+    if len(slug) <= max_len:
+        return slug or "auto-kernel"
+    digest = hashlib.sha1(slug.encode("utf-8")).hexdigest()[:10]
+    prefix = slug[: max_len - len(digest) - 1].rstrip("-")
+    return f"{prefix}-{digest}"
+
+
+def kaggle_api() -> Any:
+    from kaggle import api  # type: ignore[import-not-found]
+
+    api.authenticate()
+    return api
+
+
+def kaggle_username(api: Any | None = None) -> str:
+    for name in ("KAGGLE_USERNAME", "KAGGLE_USER"):
+        value = maybe_str(os.environ.get(name))
+        if value:
+            return value
+
+    token = maybe_str(os.environ.get("KAGGLE_API_TOKEN"))
+    if token:
+        try:
+            parsed = json.loads(token)
+            username = maybe_str(parsed.get("username"))
+            if username:
+                return username
+        except json.JSONDecodeError:
+            pass
+
+    api = api or kaggle_api()
+    username = maybe_str(getattr(api, "config_values", {}).get("username"))
+    if username:
+        return username
+    raise ValueError(
+        "Could not determine Kaggle username. Set KAGGLE_USERNAME or use a "
+        "KAGGLE_API_TOKEN JSON value that contains username/key."
+    )
+
+
+def owned_kernel_ref(comp: Competition, public_ref: str, owner: str) -> str:
+    source_owner, source_slug = public_ref.split("/", 1)
+    base = f"{comp.copy_slug_prefix}-{comp.slug}-{source_owner}-{source_slug}"
+    return f"{owner}/{slugify_text(base)}"
+
+
+def rewrite_kernel_metadata(
+    folder: Path,
+    *,
+    comp: Competition,
+    public_ref: str,
+    target_ref: str,
+) -> None:
+    metadata_path = folder / "kernel-metadata.json"
+    with metadata_path.open("r", encoding="utf-8") as fh:
+        metadata = json.load(fh)
+
+    metadata["id"] = target_ref
+    metadata.pop("id_no", None)
+    metadata["title"] = target_ref.split("/", 1)[1]
+    metadata["is_private"] = True
+
+    competition_sources = metadata.get("competition_sources") or []
+    if comp.slug not in competition_sources:
+        competition_sources.append(comp.slug)
+    metadata["competition_sources"] = competition_sources
+
+    metadata.setdefault("dataset_sources", [])
+    metadata.setdefault("kernel_sources", [])
+    metadata.setdefault("model_sources", [])
+    metadata["source_kernel"] = public_ref
+
+    with metadata_path.open("w", encoding="utf-8") as fh:
+        json.dump(metadata, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+
+def copy_and_run_public_kernel(
+    comp: Competition,
+    public_ref: str,
+    *,
+    work_dir: Path,
+) -> tuple[str, str]:
+    api = kaggle_api()
+    owner = kaggle_username(api)
+    target_ref = owned_kernel_ref(comp, public_ref, owner)
+    local_dir = work_dir / comp.slug / target_ref.replace("/", "__")
+    if local_dir.exists():
+        shutil.rmtree(local_dir)
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"+ kaggle kernels pull {public_ref} -p {local_dir} -m")
+    api.kernels_pull(public_ref, path=str(local_dir), metadata=True, quiet=True)
+    rewrite_kernel_metadata(
+        local_dir,
+        comp=comp,
+        public_ref=public_ref,
+        target_ref=target_ref,
+    )
+
+    timeout = comp.kernel_session_timeout_seconds
+    print(f"+ kaggle kernels push -p {local_dir}")
+    result = api.kernels_push(str(local_dir), timeout=timeout)
+    error = maybe_str(getattr(result, "error", None))
+    if error:
+        raise RuntimeError(f"Kernel push error: {error}")
+
+    version = getattr(result, "versionNumber", None)
+    if version is None:
+        version = getattr(result, "version_number", None)
+    if version is None:
+        raise RuntimeError("Kaggle did not return a kernel version number.")
+
+    url = maybe_str(getattr(result, "url", None))
+    if url:
+        print(f"Kernel version {version} successfully pushed. Progress: {url}")
+    else:
+        print(f"Kernel version {version} successfully pushed.")
+    return target_ref, str(version)
+
+
+def normalize_status(status: Any) -> str:
+    text = str(status or "").strip().lower()
+    if "." in text:
+        text = text.rsplit(".", 1)[-1]
+    text = text.replace("_", "-")
+    for prefix in ("kernel-session-status-", "session-status-"):
+        if text.startswith(prefix):
+            return text[len(prefix) :]
+    return text
+
+
+def wait_for_kernel_complete(
+    kernel_ref: str,
+    *,
+    timeout_seconds: int,
+    poll_seconds: int,
+) -> str:
+    api = kaggle_api()
+    deadline = time.monotonic() + timeout_seconds
+    done = {"complete", "completed", "success", "succeeded"}
+    failed = {"cancelled", "canceled", "error", "failed", "failure"}
+
+    while True:
+        response = api.kernels_status(kernel_ref)
+        status = normalize_status(getattr(response, "status", ""))
+        failure = maybe_str(getattr(response, "failure_message", None))
+        print(f"{kernel_ref} status: {status}")
+
+        if status in done or any(status.endswith(f"-{item}") for item in done):
+            return status
+        if failure or status in failed or any(
+            status.endswith(f"-{item}") for item in failed
+        ):
+            detail = f": {failure}" if failure else ""
+            raise RuntimeError(f"Kernel run failed with status {status}{detail}")
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"Timed out waiting for {kernel_ref} after {timeout_seconds} seconds."
+            )
+        time.sleep(max(poll_seconds, 5))
 
 
 def append_summary(summary_path: str | None, lines: list[str]) -> None:
@@ -612,11 +856,133 @@ def process_configured_code_submission(
     return report
 
 
+def process_auto_copy_code_submission(
+    comp: Competition,
+    *,
+    state: dict[str, Any],
+    output_dir: Path,
+    work_dir: Path,
+    submit: bool,
+    now: datetime,
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    pattern = re.compile(comp.file_pattern)
+    already_today = submissions_today(state, comp.slug, now)
+    remaining_today = max(comp.max_submissions_per_day - already_today, 0)
+    remaining_run = min(comp.max_submissions_per_run, remaining_today)
+    remaining_attempts = max(comp.max_submit_attempts_per_run, 0)
+
+    if submit and remaining_run <= 0:
+        report["skipped"].append("submission limit reached")
+        return report
+    if submit and remaining_attempts <= 0:
+        report["skipped"].append("submit attempt limit reached")
+        return report
+
+    kernels = list_kernels(comp)
+    report["kernels_seen"] = len(kernels)
+
+    for row in kernels:
+        if submit and (remaining_run <= 0 or remaining_attempts <= 0):
+            break
+
+        ref = kernel_ref(row)
+        if not ref:
+            report["errors"].append({"row": row, "error": "could not find kernel ref"})
+            continue
+
+        try:
+            files = list_kernel_files(ref)
+        except subprocess.CalledProcessError as exc:
+            err = cmd_error(exc)
+            report["errors"].append({"kernel": ref, "error": err})
+            if is_rate_limited_error(err):
+                report["skipped"].append("Kaggle API rate limit reached")
+                break
+            continue
+
+        names = [name for name in (output_file_name(item) for item in files) if name]
+        matches = [name for name in names if pattern.search(Path(name).name)]
+        report["candidates"].append({"kernel": ref, "matching_files": matches})
+        if not matches:
+            continue
+
+        for file_name in matches:
+            if not submit:
+                report["skipped"].append(
+                    f"dry-run would copy, run, and submit {ref}:{file_name}"
+                )
+                continue
+
+            remaining_attempts -= 1
+            try:
+                owned_ref, owned_version = copy_and_run_public_kernel(
+                    comp,
+                    ref,
+                    work_dir=work_dir,
+                )
+                wait_for_kernel_complete(
+                    owned_ref,
+                    timeout_seconds=comp.notebook_wait_timeout_seconds,
+                    poll_seconds=comp.notebook_poll_seconds,
+                )
+                downloaded = download_output(comp, owned_ref, output_dir)
+                selected = select_downloaded_file(downloaded, file_name)
+                if selected is None:
+                    raise FileNotFoundError(
+                        f"Downloaded output did not contain {file_name}"
+                    )
+                validation_errors = validate_submission_file(
+                    selected, comp.required_columns
+                )
+                if validation_errors:
+                    report["skipped"].append(
+                        "invalid submission format "
+                        f"{owned_ref}/{owned_version}:{file_name}: "
+                        f"{'; '.join(validation_errors)}"
+                    )
+                    continue
+                file_hash = sha256_file(selected)
+                message = make_message(comp, ref, Path(file_name).name, file_hash)
+                submit_file(
+                    comp,
+                    owned_ref,
+                    selected,
+                    message,
+                    kernel_version=owned_version,
+                )
+                record = {
+                    "competition": comp.slug,
+                    "kernel_ref": owned_ref,
+                    "kernel_version": owned_version,
+                    "source_kernel_ref": ref,
+                    "file_name": file_name,
+                    "sha256": file_hash,
+                    "submitted_at_utc": utc_now().isoformat(),
+                    "message": message,
+                }
+                state["submissions"].append(record)
+                report["submitted"].append(record)
+                remaining_run -= 1
+            except Exception as exc:  # noqa: BLE001 - keep the run moving.
+                err = error_text(exc)
+                report["errors"].append({"kernel": ref, "file": file_name, "error": err})
+
+            if remaining_run <= 0 or remaining_attempts <= 0:
+                break
+
+        if remaining_run <= 0 or remaining_attempts <= 0:
+            break
+
+    return report
+
+
 def process_competition(
     comp: Competition,
     *,
     state: dict[str, Any],
     output_dir: Path,
+    work_dir: Path,
     submit: bool,
     now: datetime,
 ) -> dict[str, Any]:
@@ -639,6 +1005,17 @@ def process_competition(
     if submit and not comp.auto_submit:
         report["skipped"].append("submit requested but auto_submit=false")
         return report
+
+    if comp.code_competition and comp.auto_copy_notebook:
+        return process_auto_copy_code_submission(
+            comp,
+            state=state,
+            output_dir=output_dir,
+            work_dir=work_dir,
+            submit=submit,
+            now=now,
+            report=report,
+        )
 
     if comp.code_competition and comp.submit_kernel:
         return process_configured_code_submission(
@@ -782,6 +1159,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="config.toml", type=Path)
     parser.add_argument("--state", default=Path("state/harvester-state.json"), type=Path)
     parser.add_argument("--output-dir", default=Path("submissions"), type=Path)
+    parser.add_argument("--work-dir", default=Path("work/kernels"), type=Path)
     parser.add_argument("--log-dir", default=Path("logs"), type=Path)
     parser.add_argument(
         "--submit",
@@ -814,6 +1192,7 @@ def main() -> int:
                 comp,
                 state=state,
                 output_dir=args.output_dir,
+                work_dir=args.work_dir,
                 submit=args.submit,
                 now=now,
             )

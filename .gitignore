@@ -12,6 +12,9 @@ submissions/**
 logs/**
 !logs/.gitkeep
 
+# Pulled notebook source copies are runtime scratch data.
+work/**
+
 # Keep state tracked so scheduled runs do not submit the same item again.
 !state/
 !state/.gitkeep
