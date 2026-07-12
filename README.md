@@ -50,8 +50,8 @@ Edit `config.toml`:
 slug = "your-competition-slug"
 enabled = true
 auto_submit = false
-top_n = 20
-sort_by = "voteCount"
+top_n = 100
+sort_by = "scoreDescending"
 file_pattern = "(?i).*submission.*\\.(csv|zip)$"
 max_submissions_per_run = 1
 max_submissions_per_day = 2
@@ -110,7 +110,8 @@ auto_submit = true
 
 Before pushing, the main values to review are:
 
-- `top_n = 30` - how many public kernels to scan each run
+- `sort_by = "scoreDescending"` - scan public kernels from highest score downward
+- `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.(csv|zip)$"` - output files to consider
 - `max_submissions_per_run = 1` - submit at most one new file each run
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
@@ -124,6 +125,8 @@ change `auto_submit = false`.
 - The tool does not decide whether a public kernel is allowed by a competition.
   Read the competition rules before enabling real submit.
 - The state file prevents repeat submissions from the same kernel/file pair.
+- `scoreDescending` follows Kaggle's kernel-list score order. For competitions
+  where a lower metric is better, change this to `scoreAscending`.
 - GitHub scheduled workflows run on the default branch and use UTC cron.
 - GitHub scheduled workflows can be delayed by platform load, so runs may start a
   little after the exact minute.

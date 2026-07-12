@@ -28,8 +28,8 @@ STATE_VERSION = 1
 
 @dataclass(frozen=True)
 class Defaults:
-    top_n: int = 20
-    sort_by: str = "voteCount"
+    top_n: int = 100
+    sort_by: str = "scoreDescending"
     language: str = "python"
     kernel_type: str = "all"
     output_type: str = "data"
@@ -394,6 +394,7 @@ def process_competition(
         "competition": comp.slug,
         "enabled": comp.enabled,
         "auto_submit": comp.auto_submit,
+        "sort_by": comp.sort_by,
         "dry_run": not submit,
         "kernels_seen": 0,
         "candidates": [],

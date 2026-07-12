@@ -1,8 +1,8 @@
 # Copy this file to config.toml and edit it.
 
 [defaults]
-top_n = 20
-sort_by = "voteCount"
+top_n = 100
+sort_by = "scoreDescending"
 language = "python"
 kernel_type = "all"
 output_type = "data"
@@ -16,8 +16,8 @@ message_template = "AUTO public kernel {kernel_ref} file {file_name}"
 slug = "titanic"
 enabled = false
 auto_submit = false
-top_n = 10
-sort_by = "voteCount"
+top_n = 100
+sort_by = "scoreDescending"
 file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
 max_submissions_per_day = 2
@@ -27,8 +27,8 @@ max_submissions_per_day = 2
 slug = "your-competition-slug"
 enabled = false
 auto_submit = false
-top_n = 20
-sort_by = "voteCount"
+top_n = 100
+sort_by = "scoreDescending"
 file_pattern = "(?i).*submission.*\\.(csv|zip)$"
 max_submissions_per_run = 1
 max_submissions_per_day = 2
