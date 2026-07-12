@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Downloaded Kaggle outputs can be large and should not be committed.
+submissions/**
+!submissions/.gitkeep
+
+# Runtime logs are uploaded as GitHub Actions artifacts instead.
+logs/**
+!logs/.gitkeep
+
+# Keep state tracked so scheduled runs do not submit the same item again.
+!state/
+!state/.gitkeep
+!state/harvester-state.json

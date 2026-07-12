@@ -1,0 +1,34 @@
+# Copy this file to config.toml and edit it.
+
+[defaults]
+top_n = 20
+sort_by = "voteCount"
+language = "python"
+kernel_type = "all"
+output_type = "data"
+file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+max_submissions_per_run = 1
+max_submissions_per_day = 2
+message_template = "AUTO public kernel {kernel_ref} file {file_name}"
+
+[[competitions]]
+# Example only. Replace with a competition slug you have joined.
+slug = "titanic"
+enabled = false
+auto_submit = false
+top_n = 10
+sort_by = "voteCount"
+file_pattern = "(?i).*submission.*\\.csv$"
+max_submissions_per_run = 1
+max_submissions_per_day = 2
+
+[[competitions]]
+# Add more competitions as needed.
+slug = "your-competition-slug"
+enabled = false
+auto_submit = false
+top_n = 20
+sort_by = "voteCount"
+file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+max_submissions_per_run = 1
+max_submissions_per_day = 2

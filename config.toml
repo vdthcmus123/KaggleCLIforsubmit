@@ -1,0 +1,20 @@
+[defaults]
+top_n = 30
+sort_by = "voteCount"
+language = "python"
+kernel_type = "all"
+output_type = "data"
+file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+max_submissions_per_run = 1
+max_submissions_per_day = 2
+message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
+
+[[competitions]]
+slug = "biohub-cell-tracking-during-development"
+enabled = true
+auto_submit = true
+top_n = 30
+sort_by = "voteCount"
+file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+max_submissions_per_run = 1
+max_submissions_per_day = 2

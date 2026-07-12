@@ -1,0 +1,89 @@
+name: Kaggle public kernel harvest
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: "Actually submit matching files. Requires auto_submit=true in config.toml."
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    # 06:00 Vietnam time (UTC+7) = 23:00 UTC on the previous day.
+    - cron: "0 23 * * *"
+    # 18:00 Vietnam time (UTC+7) = 11:00 UTC.
+    - cron: "0 11 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kaggle-public-kernel-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    env:
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run harvester
+        run: |
+          set -euo pipefail
+          CONFIG_PATH="config.toml"
+          if [ ! -f "$CONFIG_PATH" ]; then
+            CONFIG_PATH="config.example.toml"
+            echo "::warning::config.toml not found; using config.example.toml"
+          fi
+
+          ARGS=(
+            --config "$CONFIG_PATH"
+            --state state/harvester-state.json
+            --output-dir submissions
+            --log-dir logs
+            --ci-summary
+          )
+
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python scripts/kaggle_harvest.py "${ARGS[@]}" --submit
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.submit }}" = "true" ]; then
+            python scripts/kaggle_harvest.py "${ARGS[@]}" --submit
+          else
+            python scripts/kaggle_harvest.py "${ARGS[@]}"
+          fi
+
+      - name: Upload run logs and downloaded outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaggle-harvest-${{ github.run_id }}
+          path: |
+            logs/
+            submissions/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Commit updated state
+        if: success()
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- state/harvester-state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state/harvester-state.json
+            git commit -m "Update Kaggle harvest state [skip ci]"
+            git push
+          else
+            echo "No state changes to commit."
+          fi
