@@ -90,14 +90,14 @@ Remember: real submit still requires `auto_submit = true` for that competition.
 The workflow is configured with:
 
 - manual runs via `workflow_dispatch`
-- scheduled real submits at 06:00 and 18:00 Vietnam time
+- scheduled real submits at 08:00 and 20:00 Vietnam time
 - at most 1 submission per scheduled run and 2 submissions per day
 
 GitHub Actions cron uses UTC, so the workflow contains:
 
 ```yaml
-- cron: "0 23 * * *" # 06:00 Vietnam time
-- cron: "0 11 * * *" # 18:00 Vietnam time
+- cron: "0 1 * * *" # 08:00 Vietnam time
+- cron: "0 13 * * *" # 20:00 Vietnam time
 ```
 
 Manual workflow runs still default to dry-run. Set `submit=true` only when you
