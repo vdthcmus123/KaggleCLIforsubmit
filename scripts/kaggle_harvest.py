@@ -399,17 +399,18 @@ def submit_file(comp: Competition, kernel: str, file_path: Path, message: str) -
 
         api.authenticate()
         if comp.code_competition:
-            if not comp.submit_kernel or not comp.submit_kernel_version:
-                raise ValueError(
-                    f"{comp.slug} is marked code_competition=true but submit_kernel "
-                    "or submit_kernel_version is missing."
-                )
+            submit_kernel = comp.submit_kernel or kernel
+            submit_kernel_version = (
+                int(comp.submit_kernel_version)
+                if comp.submit_kernel_version
+                else None
+            )
             result = api.competition_submit_code(
                 Path(file_path).name,
                 message,
                 comp.slug,
-                comp.submit_kernel,
-                int(comp.submit_kernel_version),
+                submit_kernel,
+                submit_kernel_version,
                 quiet=True,
             )
         else:

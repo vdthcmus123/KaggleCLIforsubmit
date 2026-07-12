@@ -2,7 +2,7 @@
 top_n = 100
 sort_by = "scoreDescending"
 language = "python"
-kernel_type = "all"
+kernel_type = "notebook"
 output_type = "data"
 file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
@@ -16,7 +16,9 @@ enabled = true
 auto_submit = true
 top_n = 100
 sort_by = "scoreDescending"
+kernel_type = "notebook"
 file_pattern = "(?i).*submission.*\\.csv$"
+code_competition = true
 required_columns = [
   "id",
   "dataset",

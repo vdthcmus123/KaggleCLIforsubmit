@@ -53,6 +53,7 @@ auto_submit = false
 top_n = 100
 sort_by = "scoreDescending"
 file_pattern = "(?i).*submission.*\\.csv$"
+code_competition = false
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 1
 max_submissions_per_day = 2
@@ -112,6 +113,8 @@ auto_submit = true
 Before pushing, the main values to review are:
 
 - `sort_by = "scoreDescending"` - scan public kernels from highest score downward
+- `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
+- `code_competition = true` - submit the selected notebook/kernel instead of uploading the CSV directly
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
