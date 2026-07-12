@@ -394,30 +394,63 @@ def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]
 
 
 def submit_file(comp: Competition, kernel: str, file_path: Path, message: str) -> None:
-    args = [
-        "kaggle",
-        "competitions",
-        "submit",
-        comp.slug,
-        "-f",
-        str(file_path),
-        "-m",
-        message,
-    ]
-    if comp.code_competition:
-        if not comp.submit_kernel or not comp.submit_kernel_version:
-            raise ValueError(
-                f"{comp.slug} is marked code_competition=true but submit_kernel "
-                "or submit_kernel_version is missing."
+    try:
+        from kaggle import api  # type: ignore[import-not-found]
+
+        api.authenticate()
+        if comp.code_competition:
+            if not comp.submit_kernel or not comp.submit_kernel_version:
+                raise ValueError(
+                    f"{comp.slug} is marked code_competition=true but submit_kernel "
+                    "or submit_kernel_version is missing."
+                )
+            result = api.competition_submit_code(
+                Path(file_path).name,
+                message,
+                comp.slug,
+                comp.submit_kernel,
+                int(comp.submit_kernel_version),
+                quiet=True,
             )
-        args += ["-k", comp.submit_kernel, "-v", comp.submit_kernel_version]
-    run_cmd(args, capture=True)
+        else:
+            result = api.competition_submit(
+                str(file_path),
+                message,
+                comp.slug,
+                quiet=True,
+            )
+    except Exception as exc:  # noqa: BLE001 - preserve Kaggle response details.
+        details = exception_details(exc)
+        if details:
+            raise RuntimeError(details) from exc
+        raise
+
+    result_message = getattr(result, "message", None)
+    if result_message:
+        print(result_message)
 
 
 def error_text(exc: Exception) -> str:
     if isinstance(exc, subprocess.CalledProcessError):
         return cmd_error(exc)
     return str(exc)
+
+
+def exception_details(exc: Exception) -> str:
+    parts = [str(exc)]
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status = getattr(response, "status_code", None)
+        reason = getattr(response, "reason", None)
+        url = getattr(response, "url", None)
+        if status or reason:
+            parts.append(f"HTTP status: {status} {reason}".strip())
+        if url:
+            parts.append(f"URL: {url}")
+        text = getattr(response, "text", "") or ""
+        if text:
+            parts.append(f"Response body: {text[:4000]}")
+    return "\n".join(part for part in parts if part)
 
 
 def is_rate_limited_error(text: str) -> bool:
