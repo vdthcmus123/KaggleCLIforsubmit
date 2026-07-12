@@ -33,7 +33,8 @@ class Defaults:
     language: str = "python"
     kernel_type: str = "all"
     output_type: str = "data"
-    file_pattern: str = r"(?i).*submission.*\.(csv|zip)$"
+    file_pattern: str = r"(?i).*submission.*\.csv$"
+    required_columns: tuple[str, ...] | None = None
     max_submissions_per_run: int = 1
     max_submissions_per_day: int = 2
     message_template: str = "AUTO public kernel {kernel_ref} file {file_name}"
@@ -50,6 +51,7 @@ class Competition:
     kernel_type: str
     output_type: str
     file_pattern: str
+    required_columns: tuple[str, ...] | None
     max_submissions_per_run: int
     max_submissions_per_day: int
     message_template: str
@@ -75,6 +77,9 @@ def load_config(path: Path) -> list[Competition]:
         kernel_type=str(defaults_raw.get("kernel_type", Defaults.kernel_type)),
         output_type=str(defaults_raw.get("output_type", Defaults.output_type)),
         file_pattern=str(defaults_raw.get("file_pattern", Defaults.file_pattern)),
+        required_columns=maybe_str_list(
+            defaults_raw.get("required_columns", Defaults.required_columns)
+        ),
         max_submissions_per_run=int(
             defaults_raw.get(
                 "max_submissions_per_run", Defaults.max_submissions_per_run
@@ -106,6 +111,9 @@ def load_config(path: Path) -> list[Competition]:
                 kernel_type=str(item.get("kernel_type", defaults.kernel_type)),
                 output_type=str(item.get("output_type", defaults.output_type)),
                 file_pattern=str(item.get("file_pattern", defaults.file_pattern)),
+                required_columns=maybe_str_list(
+                    item.get("required_columns", defaults.required_columns)
+                ),
                 max_submissions_per_run=int(
                     item.get(
                         "max_submissions_per_run",
@@ -135,6 +143,16 @@ def maybe_str(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def maybe_str_list(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        items = tuple(str(item).strip() for item in value if str(item).strip())
+        return items or None
+    text = str(value).strip()
+    return (text,) if text else None
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -303,6 +321,34 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_submission_file(
+    path: Path, required_columns: tuple[str, ...] | None
+) -> list[str]:
+    if not required_columns:
+        return []
+    if path.suffix.lower() != ".csv":
+        return [f"expected .csv, got {path.name}"]
+
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as fh:
+            header = next(csv.reader(fh), None)
+    except UnicodeDecodeError as exc:
+        return [f"could not read CSV as UTF-8: {exc}"]
+    except csv.Error as exc:
+        return [f"could not parse CSV header: {exc}"]
+
+    if header is None:
+        return ["CSV is empty"]
+
+    actual = tuple(column.strip() for column in header)
+    if actual != required_columns:
+        return [
+            "CSV header mismatch: expected "
+            f"{','.join(required_columns)}; got {','.join(actual)}"
+        ]
+    return []
+
+
 def find_downloaded_files(folder: Path, pattern: re.Pattern[str]) -> list[Path]:
     matches = []
     for path in folder.rglob("*"):
@@ -454,6 +500,15 @@ def process_competition(
                     raise FileNotFoundError(
                         f"Downloaded output did not contain {file_name}"
                     )
+                validation_errors = validate_submission_file(
+                    selected, comp.required_columns
+                )
+                if validation_errors:
+                    report["skipped"].append(
+                        "invalid submission format "
+                        f"{ref}:{file_name}: {'; '.join(validation_errors)}"
+                    )
+                    continue
                 file_hash = sha256_file(selected)
                 message = make_message(comp, ref, Path(file_name).name, file_hash)
                 submit_file(comp, ref, selected, message)

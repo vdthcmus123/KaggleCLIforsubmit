@@ -4,7 +4,7 @@ sort_by = "scoreDescending"
 language = "python"
 kernel_type = "all"
 output_type = "data"
-file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
 max_submissions_per_day = 2
 message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
@@ -15,6 +15,18 @@ enabled = true
 auto_submit = true
 top_n = 100
 sort_by = "scoreDescending"
-file_pattern = "(?i).*submission.*\\.(csv|zip)$"
+file_pattern = "(?i).*submission.*\\.csv$"
+required_columns = [
+  "id",
+  "dataset",
+  "row_type",
+  "node_id",
+  "t",
+  "z",
+  "y",
+  "x",
+  "source_id",
+  "target_id",
+]
 max_submissions_per_run = 1
 max_submissions_per_day = 2
