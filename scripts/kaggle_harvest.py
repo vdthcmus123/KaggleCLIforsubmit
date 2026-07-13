@@ -691,6 +691,19 @@ def normalize_status(status: Any) -> str:
     return text
 
 
+def kernel_log_tail(api: Any, kernel_ref: str, max_chars: int = 12000) -> str:
+    try:
+        log = str(api.kernels_logs(kernel_ref) or "").strip()
+    except Exception as exc:  # noqa: BLE001 - preserve the original run failure.
+        return f"Could not retrieve Kaggle kernel log: {exception_details(exc)}"
+
+    if not log:
+        return "Kaggle returned an empty kernel log."
+    if len(log) > max_chars:
+        return "... (log truncated) ...\n" + log[-max_chars:]
+    return log
+
+
 def wait_for_kernel_complete(
     kernel_ref: str,
     *,
@@ -714,7 +727,14 @@ def wait_for_kernel_complete(
             status.endswith(f"-{item}") for item in failed
         ):
             detail = f": {failure}" if failure else ""
-            raise RuntimeError(f"Kernel run failed with status {status}{detail}")
+            log_tail = kernel_log_tail(api, kernel_ref)
+            print("--- Kaggle kernel log tail ---")
+            print(log_tail)
+            print("--- End Kaggle kernel log tail ---")
+            raise RuntimeError(
+                f"Kernel run failed with status {status}{detail}\n"
+                f"Kaggle kernel log tail:\n{log_tail}"
+            )
         if time.monotonic() >= deadline:
             raise TimeoutError(
                 f"Timed out waiting for {kernel_ref} after {timeout_seconds} seconds."

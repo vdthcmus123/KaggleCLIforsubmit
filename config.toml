@@ -6,7 +6,7 @@ kernel_type = "notebook"
 output_type = "data"
 file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
+max_submit_attempts_per_run = 3
 max_submissions_per_day = 2
 message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
 
@@ -36,5 +36,5 @@ required_columns = [
   "target_id",
 ]
 max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
+max_submit_attempts_per_run = 3
 max_submissions_per_day = 2
