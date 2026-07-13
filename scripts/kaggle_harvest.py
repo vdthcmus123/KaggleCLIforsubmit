@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -47,6 +47,8 @@ class Defaults:
     notebook_wait_timeout_seconds: int = 21600
     notebook_poll_seconds: int = 60
     kernel_session_timeout_seconds: int | None = None
+    source_kernel_versions: dict[str, int] = field(default_factory=dict)
+    dataset_source_versions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,8 @@ class Competition:
     notebook_wait_timeout_seconds: int = 21600
     notebook_poll_seconds: int = 60
     kernel_session_timeout_seconds: int | None = None
+    source_kernel_versions: dict[str, int] = field(default_factory=dict)
+    dataset_source_versions: dict[str, int] = field(default_factory=dict)
     submit_kernel: str | None = None
     submit_kernel_version: str | None = None
 
@@ -141,6 +145,14 @@ def load_config(path: Path) -> list[Competition]:
                 Defaults.kernel_session_timeout_seconds,
             )
         ),
+        source_kernel_versions=maybe_version_map(
+            defaults_raw.get("source_kernel_versions"),
+            "defaults.source_kernel_versions",
+        ),
+        dataset_source_versions=maybe_version_map(
+            defaults_raw.get("dataset_source_versions"),
+            "defaults.dataset_source_versions",
+        ),
     )
 
     competitions = []
@@ -208,6 +220,20 @@ def load_config(path: Path) -> list[Competition]:
                         defaults.kernel_session_timeout_seconds,
                     )
                 ),
+                source_kernel_versions=maybe_version_map(
+                    item.get(
+                        "source_kernel_versions",
+                        defaults.source_kernel_versions,
+                    ),
+                    f"{slug}.source_kernel_versions",
+                ),
+                dataset_source_versions=maybe_version_map(
+                    item.get(
+                        "dataset_source_versions",
+                        defaults.dataset_source_versions,
+                    ),
+                    f"{slug}.dataset_source_versions",
+                ),
                 submit_kernel=maybe_str(item.get("submit_kernel")),
                 submit_kernel_version=maybe_str(item.get("submit_kernel_version")),
             )
@@ -237,6 +263,50 @@ def maybe_str_list(value: Any) -> tuple[str, ...] | None:
         return items or None
     text = str(value).strip()
     return (text,) if text else None
+
+
+def unversioned_ref(ref: str) -> str:
+    parts = ref.strip().strip("/").split("/")
+    if len(parts) == 3 and parts[-1].isdigit():
+        parts.pop()
+    return "/".join(parts)
+
+
+def maybe_version_map(value: Any, setting_name: str) -> dict[str, int]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{setting_name} must be a TOML table.")
+
+    result: dict[str, int] = {}
+    for raw_ref, raw_version in value.items():
+        ref = unversioned_ref(str(raw_ref))
+        if len(ref.split("/")) != 2:
+            raise ValueError(
+                f"{setting_name} key {raw_ref!r} must be owner/slug."
+            )
+        if isinstance(raw_version, bool):
+            raise ValueError(
+                f"{setting_name}[{raw_ref!r}] must be a positive integer."
+            )
+        try:
+            version = int(raw_version)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{setting_name}[{raw_ref!r}] must be a positive integer."
+            ) from exc
+        if version <= 0:
+            raise ValueError(
+                f"{setting_name}[{raw_ref!r}] must be a positive integer."
+            )
+        result[ref] = version
+    return result
+
+
+def with_pinned_version(ref: str, versions: dict[str, int]) -> str:
+    base_ref = unversioned_ref(ref)
+    version = versions.get(base_ref)
+    return f"{base_ref}/{version}" if version is not None else ref
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -626,7 +696,18 @@ def rewrite_kernel_metadata(
         competition_sources.append(comp.slug)
     metadata["competition_sources"] = competition_sources
 
-    metadata.setdefault("dataset_sources", [])
+    dataset_sources = metadata.get("dataset_sources") or []
+    pinned_dataset_sources = []
+    for source in dataset_sources:
+        source_ref = str(source)
+        pinned_ref = with_pinned_version(
+            source_ref,
+            comp.dataset_source_versions,
+        )
+        if pinned_ref != source_ref:
+            print(f"Pinned dataset source: {source_ref} -> {pinned_ref}")
+        pinned_dataset_sources.append(pinned_ref)
+    metadata["dataset_sources"] = pinned_dataset_sources
     metadata.setdefault("kernel_sources", [])
     metadata.setdefault("model_sources", [])
     metadata["source_kernel"] = public_ref
@@ -636,26 +717,50 @@ def rewrite_kernel_metadata(
         fh.write("\n")
 
 
+def invalid_push_sources(result: Any) -> list[str]:
+    checks = (
+        ("dataset", "invalidDatasetSources", "invalid_dataset_sources"),
+        ("kernel", "invalidKernelSources", "invalid_kernel_sources"),
+        ("model", "invalidModelSources", "invalid_model_sources"),
+        (
+            "competition",
+            "invalidCompetitionSources",
+            "invalid_competition_sources",
+        ),
+    )
+    invalid = []
+    for source_type, camel_name, snake_name in checks:
+        values = getattr(result, camel_name, None)
+        if values is None:
+            values = getattr(result, snake_name, None)
+        if values:
+            invalid.extend(f"{source_type}:{value}" for value in values)
+    return invalid
+
+
 def copy_and_run_public_kernel(
     comp: Competition,
     public_ref: str,
     *,
     work_dir: Path,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     api = kaggle_api()
     owner = kaggle_username(api)
     target_ref = owned_kernel_ref(comp, public_ref, owner)
+    source_ref = with_pinned_version(public_ref, comp.source_kernel_versions)
+    if source_ref != public_ref:
+        print(f"Pinned source notebook: {public_ref} -> {source_ref}")
     local_dir = work_dir / comp.slug / target_ref.replace("/", "__")
     if local_dir.exists():
         shutil.rmtree(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"+ kaggle kernels pull {public_ref} -p {local_dir} -m")
-    api.kernels_pull(public_ref, path=str(local_dir), metadata=True, quiet=True)
+    print(f"+ kaggle kernels pull {source_ref} -p {local_dir} -m")
+    api.kernels_pull(source_ref, path=str(local_dir), metadata=True, quiet=True)
     rewrite_kernel_metadata(
         local_dir,
         comp=comp,
-        public_ref=public_ref,
+        public_ref=source_ref,
         target_ref=target_ref,
     )
 
@@ -665,6 +770,11 @@ def copy_and_run_public_kernel(
     error = maybe_str(getattr(result, "error", None))
     if error:
         raise RuntimeError(f"Kernel push error: {error}")
+    invalid_sources = invalid_push_sources(result)
+    if invalid_sources:
+        raise RuntimeError(
+            "Kaggle rejected pinned kernel inputs: " + ", ".join(invalid_sources)
+        )
 
     version = getattr(result, "versionNumber", None)
     if version is None:
@@ -677,7 +787,7 @@ def copy_and_run_public_kernel(
         print(f"Kernel version {version} successfully pushed. Progress: {url}")
     else:
         print(f"Kernel version {version} successfully pushed.")
-    return target_ref, str(version)
+    return target_ref, str(version), source_ref
 
 
 def normalize_status(status: Any) -> str:
@@ -936,7 +1046,7 @@ def process_auto_copy_code_submission(
 
             remaining_attempts -= 1
             try:
-                owned_ref, owned_version = copy_and_run_public_kernel(
+                owned_ref, owned_version, source_ref = copy_and_run_public_kernel(
                     comp,
                     ref,
                     work_dir=work_dir,
@@ -963,7 +1073,12 @@ def process_auto_copy_code_submission(
                     )
                     continue
                 file_hash = sha256_file(selected)
-                message = make_message(comp, ref, Path(file_name).name, file_hash)
+                message = make_message(
+                    comp,
+                    source_ref,
+                    Path(file_name).name,
+                    file_hash,
+                )
                 submit_file(
                     comp,
                     owned_ref,
@@ -975,7 +1090,7 @@ def process_auto_copy_code_submission(
                     "competition": comp.slug,
                     "kernel_ref": owned_ref,
                     "kernel_version": owned_version,
-                    "source_kernel_ref": ref,
+                    "source_kernel_ref": source_ref,
                     "file_name": file_name,
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),

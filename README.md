@@ -113,6 +113,8 @@ enabled = true
 auto_submit = true
 code_competition = true
 auto_copy_notebook = true
+source_kernel_versions = { "pilkwang/biohub-cell-tracking-blend-preprocessings" = 25 }
+dataset_source_versions = { "pilkwang/biohub-deepcenter-unet3d-center-prior-v1" = 4 }
 ```
 
 Before pushing, the main values to review are:
@@ -121,6 +123,8 @@ Before pushing, the main values to review are:
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
 - `auto_copy_notebook = true` - pull the selected public notebook, push it as a private notebook under your Kaggle account, wait for it to finish, then submit that version
+- `source_kernel_versions` - reproduce the scored public notebook version instead of silently pulling its newest edit
+- `dataset_source_versions` - reproduce exact input dataset versions; Biohub pins DeepCenter V4 because its checkpoint is epoch 400
 - `notebook_wait_timeout_seconds = 21600` - wait up to 6 hours for the copied notebook run
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV

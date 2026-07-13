@@ -23,6 +23,8 @@ auto_copy_notebook = true
 copy_slug_prefix = "auto"
 notebook_wait_timeout_seconds = 21600
 notebook_poll_seconds = 60
+source_kernel_versions = { "pilkwang/biohub-cell-tracking-blend-preprocessings" = 25 }
+dataset_source_versions = { "pilkwang/biohub-deepcenter-unet3d-center-prior-v1" = 4 }
 required_columns = [
   "id",
   "dataset",
