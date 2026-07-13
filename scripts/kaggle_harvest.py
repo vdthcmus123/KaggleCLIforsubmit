@@ -22,10 +22,17 @@ import tomllib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 
 STATE_VERSION = 1
+SCRIPT_VERSION_ID_RE = re.compile(
+    r"scriptVersionId(?:%3D|=)(\d+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -375,6 +382,42 @@ def get_first(row: dict[str, Any], keys: list[str]) -> str | None:
     return None
 
 
+def object_value(value: Any, names: tuple[str, ...]) -> Any:
+    if isinstance(value, dict):
+        for name in names:
+            if name in value and value[name] is not None:
+                return value[name]
+        return None
+    for name in names:
+        item = getattr(value, name, None)
+        if item is not None:
+            return item
+    return None
+
+
+def kernel_metadata_row(metadata: Any) -> dict[str, Any]:
+    fields = {
+        "ref": ("ref",),
+        "title": ("title",),
+        "author": ("author",),
+        "lastRunTime": ("last_run_time", "lastRunTime"),
+        "totalVotes": ("total_votes", "totalVotes"),
+        "currentVersionNumber": (
+            "current_version_number",
+            "currentVersionNumber",
+        ),
+        "kernelId": ("id",),
+    }
+    row: dict[str, Any] = {}
+    for output_name, names in fields.items():
+        value = object_value(metadata, names)
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        if value is not None:
+            row[output_name] = value
+    return row
+
+
 def list_kernels(comp: Competition) -> list[dict[str, Any]]:
     args = [
         "kaggle",
@@ -398,12 +441,155 @@ def list_kernels(comp: Competition) -> list[dict[str, Any]]:
     if comp.output_type != "all":
         args += ["--output-type", comp.output_type]
 
-    data = run_json(args)
-    if isinstance(data, dict):
-        data = data.get("rows", data.get("items", []))
-    if not isinstance(data, list):
-        raise ValueError("Unexpected kaggle kernels list output.")
-    return [row for row in data if isinstance(row, dict)]
+    printable = " ".join(shlex.quote(part) for part in args)
+    print(f"+ {printable}")
+    data = kaggle_api().kernels_list(
+        page=1,
+        page_size=comp.top_n,
+        competition=comp.slug,
+        search=comp.search,
+        language=comp.language,
+        kernel_type=comp.kernel_type,
+        output_type=comp.output_type,
+        sort_by=comp.sort_by,
+    )
+    return [kernel_metadata_row(item) for item in (data or []) if item is not None]
+
+
+def current_kernel_version(row: dict[str, Any]) -> int:
+    raw = get_first(
+        row,
+        ["currentVersionNumber", "current_version_number", "versionNumber"],
+    )
+    if raw is None:
+        raise ValueError("Kaggle did not return currentVersionNumber.")
+    version = int(raw)
+    if version <= 0:
+        raise ValueError(f"Invalid currentVersionNumber: {raw}")
+    return version
+
+
+def notebook_page_url(kernel: str, version: int | None = None) -> str:
+    parts = unversioned_ref(kernel).split("/")
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(f"Invalid kernel ref: {kernel}")
+    owner, slug = (quote(part, safe="") for part in parts)
+    url = f"https://www.kaggle.com/code/{owner}/{slug}"
+    if version is not None:
+        if version <= 0:
+            raise ValueError(f"Invalid kernel version: {version}")
+        url += f"/versions/{version}"
+    return url
+
+
+def fetch_public_html(url: str, timeout_seconds: int = 30) -> str:
+    request = Request(
+        url,
+        headers={
+            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "KagglePublicSubmitter/1.0",
+        },
+    )
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code != 429 and exc.code < 500:
+                break
+        except (TimeoutError, URLError) as exc:
+            last_error = exc
+        if attempt < 2:
+            time.sleep(2 ** (attempt + 1))
+    raise RuntimeError(f"Could not read public Kaggle page: {url}") from last_error
+
+
+def script_version_id_from_html(html: str) -> int:
+    ids = {int(match) for match in SCRIPT_VERSION_ID_RE.findall(html)}
+    if not ids:
+        raise ValueError("Kaggle page did not expose a scriptVersionId.")
+    if len(ids) != 1:
+        raise ValueError(f"Kaggle page exposed ambiguous scriptVersionIds: {ids}")
+    return ids.pop()
+
+
+def resolve_best_score_version(
+    kernel: str,
+    current_version: int,
+    *,
+    fetch_html: Callable[[str], str] | None = None,
+) -> tuple[int, int]:
+    if current_version <= 0:
+        raise ValueError(f"Invalid current version for {kernel}: {current_version}")
+
+    fetch = fetch_html or fetch_public_html
+    target_session_id = script_version_id_from_html(
+        fetch(notebook_page_url(kernel))
+    )
+    cache: dict[int, int] = {}
+    failed_versions: set[int] = set()
+
+    def session_id(version: int) -> int:
+        if version not in cache:
+            cache[version] = script_version_id_from_html(
+                fetch(notebook_page_url(kernel, version))
+            )
+        return cache[version]
+
+    low, high = 1, current_version
+    while low <= high:
+        middle = (low + high) // 2
+        candidate_id = session_id(middle)
+        if candidate_id == target_session_id:
+            return middle, target_session_id
+        if candidate_id < target_session_id:
+            low = middle + 1
+        else:
+            high = middle - 1
+
+    for version in range(current_version, 0, -1):
+        if cache.get(version) == target_session_id:
+            return version, target_session_id
+        if version in cache or version in failed_versions:
+            continue
+        try:
+            if session_id(version) == target_session_id:
+                return version, target_session_id
+        except Exception:  # noqa: BLE001 - one deleted version must not hide others.
+            failed_versions.add(version)
+
+    raise RuntimeError(
+        f"Could not map best-score scriptVersionId {target_session_id} to any "
+        f"published version of {kernel}; refusing to use latest."
+    )
+
+
+def resolved_source_kernel(
+    comp: Competition,
+    row: dict[str, Any],
+    *,
+    fetch_html: Callable[[str], str] | None = None,
+) -> tuple[str, str, int | None]:
+    ref = kernel_ref(row)
+    if not ref:
+        raise ValueError("Could not find kernel ref.")
+    base_ref = unversioned_ref(ref)
+    configured_version = comp.source_kernel_versions.get(base_ref)
+    if configured_version is not None:
+        return f"{base_ref}/{configured_version}", "configured", None
+
+    version, session_id = resolve_best_score_version(
+        base_ref,
+        current_kernel_version(row),
+        fetch_html=fetch_html,
+    )
+    print(
+        f"Resolved best-score notebook: {base_ref} -> V{version} "
+        f"(scriptVersionId {session_id})"
+    )
+    return f"{base_ref}/{version}", "best-score", session_id
 
 
 def kernel_ref(row: dict[str, Any]) -> str | None:
@@ -740,16 +926,18 @@ def invalid_push_sources(result: Any) -> list[str]:
 
 def copy_and_run_public_kernel(
     comp: Competition,
-    public_ref: str,
+    source_ref: str,
     *,
     work_dir: Path,
 ) -> tuple[str, str, str]:
+    base_ref = unversioned_ref(source_ref)
+    if source_ref == base_ref:
+        raise ValueError(
+            f"Refusing to copy unversioned notebook {source_ref}; exact version required."
+        )
     api = kaggle_api()
     owner = kaggle_username(api)
-    target_ref = owned_kernel_ref(comp, public_ref, owner)
-    source_ref = with_pinned_version(public_ref, comp.source_kernel_versions)
-    if source_ref != public_ref:
-        print(f"Pinned source notebook: {public_ref} -> {source_ref}")
+    target_ref = owned_kernel_ref(comp, base_ref, owner)
     local_dir = work_dir / comp.slug / target_ref.replace("/", "__")
     if local_dir.exists():
         shutil.rmtree(local_dir)
@@ -1022,10 +1210,24 @@ def process_auto_copy_code_submission(
             continue
 
         try:
-            files = list_kernel_files(ref)
+            source_ref, version_resolution, source_session_id = (
+                resolved_source_kernel(comp, row)
+            )
+        except Exception as exc:  # noqa: BLE001 - skip unverifiable notebooks.
+            report["errors"].append(
+                {
+                    "kernel": ref,
+                    "stage": "resolve best-score version",
+                    "error": error_text(exc),
+                }
+            )
+            continue
+
+        try:
+            files = list_kernel_files(source_ref)
         except subprocess.CalledProcessError as exc:
             err = cmd_error(exc)
-            report["errors"].append({"kernel": ref, "error": err})
+            report["errors"].append({"kernel": source_ref, "error": err})
             if is_rate_limited_error(err):
                 report["skipped"].append("Kaggle API rate limit reached")
                 break
@@ -1033,14 +1235,22 @@ def process_auto_copy_code_submission(
 
         names = [name for name in (output_file_name(item) for item in files) if name]
         matches = [name for name in names if pattern.search(Path(name).name)]
-        report["candidates"].append({"kernel": ref, "matching_files": matches})
+        report["candidates"].append(
+            {
+                "kernel": ref,
+                "source_kernel_ref": source_ref,
+                "version_resolution": version_resolution,
+                "source_session_id": source_session_id,
+                "matching_files": matches,
+            }
+        )
         if not matches:
             continue
 
         for file_name in matches:
             if not submit:
                 report["skipped"].append(
-                    f"dry-run would copy, run, and submit {ref}:{file_name}"
+                    f"dry-run would copy, run, and submit {source_ref}:{file_name}"
                 )
                 continue
 
@@ -1048,7 +1258,7 @@ def process_auto_copy_code_submission(
             try:
                 owned_ref, owned_version, source_ref = copy_and_run_public_kernel(
                     comp,
-                    ref,
+                    source_ref,
                     work_dir=work_dir,
                 )
                 wait_for_kernel_complete(
@@ -1101,7 +1311,9 @@ def process_auto_copy_code_submission(
                 remaining_run -= 1
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
                 err = error_text(exc)
-                report["errors"].append({"kernel": ref, "file": file_name, "error": err})
+                report["errors"].append(
+                    {"kernel": source_ref, "file": file_name, "error": err}
+                )
 
             if remaining_run <= 0 or remaining_attempts <= 0:
                 break

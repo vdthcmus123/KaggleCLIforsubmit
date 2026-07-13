@@ -113,8 +113,8 @@ enabled = true
 auto_submit = true
 code_competition = true
 auto_copy_notebook = true
-source_kernel_versions = { "pilkwang/biohub-cell-tracking-blend-preprocessings" = 25 }
-dataset_source_versions = { "pilkwang/biohub-deepcenter-unet3d-center-prior-v1" = 4 }
+source_kernel_versions = {}
+dataset_source_versions = {}
 ```
 
 Before pushing, the main values to review are:
@@ -123,8 +123,8 @@ Before pushing, the main values to review are:
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
 - `auto_copy_notebook = true` - pull the selected public notebook, push it as a private notebook under your Kaggle account, wait for it to finish, then submit that version
-- `source_kernel_versions` - reproduce the scored public notebook version instead of silently pulling its newest edit
-- `dataset_source_versions` - reproduce exact input dataset versions; Biohub pins DeepCenter V4 because its checkpoint is epoch 400
+- `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty for automatic best-score version resolution
+- `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
 - `notebook_wait_timeout_seconds = 21600` - wait up to 6 hours for the copied notebook run
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
@@ -137,6 +137,12 @@ For Biohub, Kaggle will not let one account submit another user's notebook
 session directly. The workflow avoids that permission error by creating a fresh
 private notebook copy in the Kaggle account represented by `KAGGLE_API_TOKEN`,
 then submitting the returned kernel version number.
+
+For every score-sorted candidate, the workflow reads the public notebook's
+best-score `scriptVersionId`, maps it back to an exact `/versions/N` URL, and
+uses `owner/slug/N` for output inspection and copying. If that mapping cannot be
+verified, the candidate is skipped; the workflow never silently falls back to
+the latest version.
 
 ## Notes
 
