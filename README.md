@@ -142,7 +142,10 @@ For every score-sorted candidate, the workflow reads the public notebook's
 best-score `scriptVersionId`, maps it back to an exact `/versions/N` URL, and
 uses `owner/slug/N` for output inspection and copying. If that mapping cannot be
 verified, the candidate is skipped; the workflow never silently falls back to
-the latest version.
+the latest version. Because Kaggle's kernel-list response can omit
+`currentVersionNumber` (the SDK then reports `0`), the workflow obtains it from
+the per-kernel metadata endpoint and can discover a safe version bound from the
+public version pages if that endpoint also omits it.
 
 ## Notes
 

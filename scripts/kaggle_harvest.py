@@ -29,6 +29,7 @@ from urllib.request import Request, urlopen
 
 
 STATE_VERSION = 1
+MAX_DISCOVERABLE_KERNEL_VERSION = 16_384
 SCRIPT_VERSION_ID_RE = re.compile(
     r"scriptVersionId(?:%3D|=)(\d+)",
     re.IGNORECASE,
@@ -456,17 +457,40 @@ def list_kernels(comp: Competition) -> list[dict[str, Any]]:
     return [kernel_metadata_row(item) for item in (data or []) if item is not None]
 
 
-def current_kernel_version(row: dict[str, Any]) -> int:
+def current_kernel_version(row: dict[str, Any]) -> int | None:
     raw = get_first(
         row,
         ["currentVersionNumber", "current_version_number", "versionNumber"],
     )
     if raw is None:
-        raise ValueError("Kaggle did not return currentVersionNumber.")
+        return None
     version = int(raw)
     if version <= 0:
-        raise ValueError(f"Invalid currentVersionNumber: {raw}")
+        return None
     return version
+
+
+def fetch_kernel_metadata(kernel: str, *, api: Any | None = None) -> dict[str, Any]:
+    from kagglesdk.kernels.types.kernels_api_service import (  # type: ignore[import-not-found]
+        ApiGetKernelRequest,
+    )
+
+    base_ref = unversioned_ref(kernel)
+    parts = base_ref.split("/")
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(f"Invalid kernel ref: {kernel}")
+
+    request = ApiGetKernelRequest()
+    request.user_name, request.kernel_slug = parts
+    api_client = api or kaggle_api()
+    print(f"+ Kaggle GetKernel metadata {base_ref}")
+    with api_client.build_kaggle_client() as client:
+        response = client.kernels.kernels_api_client.get_kernel(request)
+
+    metadata = getattr(response, "metadata", None)
+    if metadata is None:
+        raise RuntimeError(f"Kaggle GetKernel returned no metadata for {base_ref}.")
+    return kernel_metadata_row(metadata)
 
 
 def notebook_page_url(kernel: str, version: int | None = None) -> str:
@@ -517,12 +541,12 @@ def script_version_id_from_html(html: str) -> int:
 
 def resolve_best_score_version(
     kernel: str,
-    current_version: int,
+    current_version: int | None,
     *,
     fetch_html: Callable[[str], str] | None = None,
 ) -> tuple[int, int]:
-    if current_version <= 0:
-        raise ValueError(f"Invalid current version for {kernel}: {current_version}")
+    if current_version is not None and current_version <= 0:
+        current_version = None
 
     fetch = fetch_html or fetch_public_html
     target_session_id = script_version_id_from_html(
@@ -538,10 +562,38 @@ def resolve_best_score_version(
             )
         return cache[version]
 
+    if current_version is None:
+        probe = 1
+        while probe <= MAX_DISCOVERABLE_KERNEL_VERSION:
+            try:
+                candidate_id = session_id(probe)
+            except Exception:  # noqa: BLE001 - the probe can be above latest.
+                failed_versions.add(probe)
+                current_version = probe - 1
+                break
+            if candidate_id == target_session_id:
+                return probe, target_session_id
+            if candidate_id > target_session_id:
+                current_version = probe
+                break
+            probe *= 2
+        else:
+            raise RuntimeError(
+                f"Could not discover a version bound for {kernel} below "
+                f"V{MAX_DISCOVERABLE_KERNEL_VERSION}."
+            )
+
+    if current_version <= 0:
+        raise RuntimeError(f"Could not discover any published version of {kernel}.")
+
     low, high = 1, current_version
     while low <= high:
         middle = (low + high) // 2
-        candidate_id = session_id(middle)
+        try:
+            candidate_id = session_id(middle)
+        except Exception:  # noqa: BLE001 - fall back to a hole-tolerant scan.
+            failed_versions.add(middle)
+            break
         if candidate_id == target_session_id:
             return middle, target_session_id
         if candidate_id < target_session_id:
@@ -571,6 +623,7 @@ def resolved_source_kernel(
     row: dict[str, Any],
     *,
     fetch_html: Callable[[str], str] | None = None,
+    fetch_metadata: Callable[[str], dict[str, Any]] | None = None,
 ) -> tuple[str, str, int | None]:
     ref = kernel_ref(row)
     if not ref:
@@ -580,9 +633,25 @@ def resolved_source_kernel(
     if configured_version is not None:
         return f"{base_ref}/{configured_version}", "configured", None
 
+    current_version = current_kernel_version(row)
+    if current_version is None:
+        metadata_reader = fetch_metadata or fetch_kernel_metadata
+        try:
+            current_version = current_kernel_version(metadata_reader(base_ref))
+        except Exception as exc:  # noqa: BLE001 - public HTML is the final fallback.
+            print(
+                f"Could not read current version metadata for {base_ref}: "
+                f"{error_text(exc)}"
+            )
+        if current_version is None:
+            print(
+                f"Kaggle did not expose currentVersionNumber for {base_ref}; "
+                "discovering the version range from public pages."
+            )
+
     version, session_id = resolve_best_score_version(
         base_ref,
-        current_kernel_version(row),
+        current_version,
         fetch_html=fetch_html,
     )
     print(

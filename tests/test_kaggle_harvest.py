@@ -60,6 +60,42 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(resolution, "best-score")
         self.assertEqual(session_id, self.version_sessions[25])
 
+    def test_zero_list_version_uses_get_kernel_metadata(self) -> None:
+        requested = []
+
+        def fetch_metadata(kernel: str) -> dict[str, int]:
+            requested.append(kernel)
+            return {"currentVersionNumber": 33}
+
+        source_ref, resolution, session_id = (
+            kaggle_harvest.resolved_source_kernel(
+                self.competition,
+                {"ref": SOURCE_KERNEL, "currentVersionNumber": 0},
+                fetch_html=self.fetch_best_v25,
+                fetch_metadata=fetch_metadata,
+            )
+        )
+        self.assertEqual(requested, [SOURCE_KERNEL])
+        self.assertEqual(source_ref, f"{SOURCE_KERNEL}/25")
+        self.assertEqual(resolution, "best-score")
+        self.assertEqual(session_id, self.version_sessions[25])
+
+    def test_missing_metadata_discovers_version_bound_from_public_pages(self) -> None:
+        def fetch_without_metadata(_kernel: str) -> dict[str, int]:
+            return {"currentVersionNumber": 0}
+
+        source_ref, resolution, session_id = (
+            kaggle_harvest.resolved_source_kernel(
+                self.competition,
+                {"ref": SOURCE_KERNEL, "currentVersionNumber": 0},
+                fetch_html=self.fetch_best_v25,
+                fetch_metadata=fetch_without_metadata,
+            )
+        )
+        self.assertEqual(source_ref, f"{SOURCE_KERNEL}/25")
+        self.assertEqual(resolution, "best-score")
+        self.assertEqual(session_id, self.version_sessions[25])
+
     def test_kernel_list_metadata_retains_current_version(self) -> None:
         row = kaggle_harvest.kernel_metadata_row(
             SimpleNamespace(
