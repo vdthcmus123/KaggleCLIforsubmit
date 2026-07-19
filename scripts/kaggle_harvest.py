@@ -425,6 +425,7 @@ def load_state(path: Path) -> dict[str, Any]:
             "schema_version": STATE_VERSION,
             "submissions": [],
             "failed_submissions": [],
+            "rejected_sources": [],
         }
     with path.open("r", encoding="utf-8") as fh:
         state = json.load(fh)
@@ -432,6 +433,7 @@ def load_state(path: Path) -> dict[str, Any]:
         raise ValueError(f"Unsupported state schema in {path}")
     state.setdefault("submissions", [])
     state.setdefault("failed_submissions", [])
+    state.setdefault("rejected_sources", [])
     return state
 
 
@@ -835,6 +837,42 @@ def source_kernel_already_submitted(
         sub.get("competition") == competition
         and sub.get("source_kernel_ref") == source_ref
         for sub in state.get("submissions", [])
+    )
+
+
+def source_kernel_already_attempted(
+    state: dict[str, Any],
+    competition: str,
+    source_ref: str,
+) -> bool:
+    attempts = [
+        *state.get("submissions", []),
+        *state.get("failed_submissions", []),
+        *state.get("rejected_sources", []),
+    ]
+    return any(
+        item.get("competition") == competition
+        and item.get("source_kernel_ref") == source_ref
+        for item in attempts
+    )
+
+
+def submission_hash_already_attempted(
+    state: dict[str, Any],
+    competition: str,
+    file_hash: str,
+) -> bool:
+    if not file_hash:
+        return False
+    attempts = [
+        *state.get("submissions", []),
+        *state.get("failed_submissions", []),
+        *state.get("rejected_sources", []),
+    ]
+    return any(
+        item.get("competition") == competition
+        and str(item.get("sha256", "")).lower() == file_hash.lower()
+        for item in attempts
     )
 
 
@@ -1299,6 +1337,29 @@ def remember_failed_submission(
     return record
 
 
+def remember_rejected_source(
+    state: dict[str, Any],
+    *,
+    comp: Competition,
+    source_kernel_ref: str,
+    reason: str,
+    file_name: str | None = None,
+    file_hash: str | None = None,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "competition": comp.slug,
+        "source_kernel_ref": source_kernel_ref,
+        "reason": reason,
+        "rejected_at_utc": utc_now().isoformat(),
+    }
+    if file_name:
+        record["file_name"] = file_name
+    if file_hash:
+        record["sha256"] = file_hash
+    state.setdefault("rejected_sources", []).append(record)
+    return record
+
+
 def slugify_text(text: str, *, max_len: int = 50) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     slug = re.sub(r"-+", "-", slug)
@@ -1493,9 +1554,10 @@ for source in candidates:
     print(f"Relayed {{source}} -> {{destination}}")
 
 if not copied:
-    raise FileNotFoundError(
-        f"No output matched {{file_pattern!r}} or {{expected_names}}"
-    )
+    message = f"No output matched {{file_pattern!r}} or {{expected_names}}"
+    if expected_names or canonical_output_name:
+        raise FileNotFoundError(message)
+    print(message)
 print(f"Relay complete: {{copied}}")
 '''
     return {
@@ -1911,8 +1973,8 @@ def process_auto_copy_code_submission(
         }
         report["candidates"].append(candidate_report)
 
-        if source_kernel_already_submitted(state, comp.slug, source_ref):
-            report["skipped"].append(f"already submitted source {source_ref}")
+        if source_kernel_already_attempted(state, comp.slug, source_ref):
+            report["skipped"].append(f"already attempted source {source_ref}")
             continue
 
         if not submit:
@@ -1956,15 +2018,43 @@ def process_auto_copy_code_submission(
             ),
         )
         if not relay_outputs:
-            report["errors"].append(
-                {
-                    "kernel": launched_source_ref,
-                    "stage": "inspect relay output",
-                    "error": "Relay notebook produced no matching submission file.",
-                }
+            reason = "relay notebook produced no matching submission file"
+            rejected = remember_rejected_source(
+                state,
+                comp=comp,
+                source_kernel_ref=launched_source_ref,
+                reason=reason,
+            )
+            report.setdefault("rejected_sources", []).append(rejected)
+            report["skipped"].append(
+                f"rejected source {launched_source_ref}: {reason}"
             )
             continue
         candidate_report["matching_files"] = [path.name for path in relay_outputs]
+
+        if comp.submission_file_name:
+            native_outputs = [
+                path
+                for path in relay_outputs
+                if path.name == comp.submission_file_name
+            ]
+            if not native_outputs:
+                reason = (
+                    f"required native output {comp.submission_file_name!r} missing; "
+                    "refusing to rename an alternate artifact"
+                )
+                rejected = remember_rejected_source(
+                    state,
+                    comp=comp,
+                    source_kernel_ref=launched_source_ref,
+                    reason=reason,
+                )
+                report.setdefault("rejected_sources", []).append(rejected)
+                report["skipped"].append(
+                    f"rejected source {launched_source_ref}: {reason}"
+                )
+                continue
+            relay_outputs = native_outputs[:1]
 
         for selected in relay_outputs:
             source_file_name = selected.name
@@ -1974,6 +2064,7 @@ def process_auto_copy_code_submission(
             file_hash = ""
             message = ""
             try:
+                file_hash = sha256_file(submission_path)
                 validation_errors = validate_submission_file(
                     submission_path,
                     comp.required_columns,
@@ -1985,75 +2076,40 @@ def process_auto_copy_code_submission(
                         f"{owned_ref}/{owned_version}:{source_file_name}: "
                         f"{'; '.join(validation_errors)}"
                     )
+                    if comp.submission_file_name:
+                        rejected = remember_rejected_source(
+                            state,
+                            comp=comp,
+                            source_kernel_ref=launched_source_ref,
+                            file_name=source_file_name,
+                            file_hash=file_hash,
+                            reason="; ".join(validation_errors),
+                        )
+                        report.setdefault("rejected_sources", []).append(rejected)
+                        break
                     continue
-                file_hash = sha256_file(submission_path)
 
-                canonical_name = comp.submission_file_name
-                if canonical_name and submission_path.name != canonical_name:
-                    print(
-                        f"Normalizing {source_file_name} to required notebook "
-                        f"output name {canonical_name}"
+                if submission_hash_already_attempted(
+                    state,
+                    comp.slug,
+                    file_hash,
+                ):
+                    reason = f"submission hash already attempted: {file_hash}"
+                    report["skipped"].append(
+                        f"rejected source {launched_source_ref}: {reason}"
                     )
-                    (
-                        submission_kernel_ref,
-                        submission_kernel_version,
-                        canonical_source_ref,
-                    ) = copy_and_run_public_kernel(
-                        comp,
-                        launched_source_ref,
-                        work_dir=work_dir,
-                        output_files=[source_file_name],
-                        canonical_output_name=canonical_name,
-                    )
-                    if canonical_source_ref != launched_source_ref:
-                        raise RuntimeError(
-                            "Canonical relay changed the exact source notebook version."
+                    if comp.submission_file_name:
+                        rejected = remember_rejected_source(
+                            state,
+                            comp=comp,
+                            source_kernel_ref=launched_source_ref,
+                            file_name=source_file_name,
+                            file_hash=file_hash,
+                            reason=reason,
                         )
-                    wait_for_kernel_complete(
-                        submission_kernel_ref,
-                        timeout_seconds=comp.notebook_wait_timeout_seconds,
-                        poll_seconds=comp.notebook_poll_seconds,
-                    )
-                    canonical_outputs = download_output(
-                        comp,
-                        submission_kernel_ref,
-                        output_dir / "canonicalized",
-                    )
-                    canonical_path = next(
-                        (
-                            path
-                            for path in canonical_outputs
-                            if path.name == canonical_name
-                        ),
-                        None,
-                    )
-                    if canonical_path is None:
-                        raise FileNotFoundError(
-                            "Canonical relay did not produce " + canonical_name
-                        )
-                    canonical_errors = validate_submission_file(
-                        canonical_path,
-                        comp.required_columns,
-                        comp.dataset_shapes,
-                    )
-                    if canonical_errors:
-                        raise ValueError(
-                            "Canonical relay produced an invalid submission: "
-                            + "; ".join(canonical_errors)
-                        )
-                    canonical_hash = sha256_file(canonical_path)
-                    if canonical_hash != file_hash:
-                        raise RuntimeError(
-                            "Canonical relay changed submission file contents."
-                        )
-                    submission_path = canonical_path
-                    candidate_report.setdefault("canonicalized_files", []).append(
-                        {
-                            "source_file": source_file_name,
-                            "submission_file": canonical_name,
-                            "kernel_version": submission_kernel_version,
-                        }
-                    )
+                        report.setdefault("rejected_sources", []).append(rejected)
+                        break
+                    continue
 
                 message = make_message(
                     comp,
@@ -2139,6 +2195,7 @@ def process_competition(
         "candidates": [],
         "submitted": [],
         "failed_submissions": [],
+        "rejected_sources": [],
         "skipped": [],
         "errors": [],
     }

@@ -131,11 +131,11 @@ Before pushing, the main values to review are:
 - `require_public_score = true` - Biohub is successful only after a public score is present
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
-- `submission_file_name = "submission.csv"` - publish the validated file under the exact notebook-output name required by Biohub
+- `submission_file_name = "submission.csv"` - require the public notebook version to produce that exact native output; alternate artifacts are never renamed for submission
 - `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, and edge references
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
-- `max_submit_attempts_per_run = 3` - if a relay notebook fails, continue downward through the score-sorted list, up to three distinct notebooks per run
+- `max_submit_attempts_per_run = 10` - if a relay notebook is rejected or fails, continue downward through the score-sorted list, up to ten new notebook versions per run
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
 
 For Biohub, Kaggle will not let one account submit another user's notebook
@@ -157,19 +157,19 @@ to the latest version. Because Kaggle's kernel-list response can omit
 the per-kernel metadata endpoint and can discover a safe version bound from the
 public version pages if that endpoint also omits it.
 
-After a source version is submitted successfully, later runs skip that exact
-`owner/slug/N` and continue down the score-sorted list. A newly scored version
-of the same notebook is treated as a new candidate.
+After a source version is submitted, rejected by Kaggle's scorer, or rejected
+by local validation, later runs skip that exact `owner/slug/N` and continue
+down the score-sorted list. A newly scored version of the same notebook is
+treated as a new candidate. Previously attempted SHA-256 hashes are also
+skipped, so forks that publish identical bad output do not consume another
+submission slot.
 
-When several matching files exist, the workflow validates them in priority
-order. An invalid `submission.csv` is skipped and a valid alternative such as
-`submission_clean.csv` can be selected from the same source version. Because
-Biohub requires the notebook output to be named exactly `submission.csv`, a
-second lightweight relay publishes the selected file under that name and the
-workflow verifies that its SHA-256 hash did not change before submission. API
-acceptance alone is not treated as success: the workflow waits for final
-scoring, checks `error_description`, and records failed scoring attempts
-separately so they still count toward the daily limit.
+For Biohub, only the source version's native `submission.csv` is eligible.
+If that file is absent or invalid, the entire source version is recorded as
+rejected; an apparently cleaner side artifact such as `submission_clean.csv`
+is not renamed and submitted. API acceptance alone is not treated as success:
+the workflow waits for final scoring, checks `error_description`, and records
+failed scoring attempts separately so they still count toward the daily limit.
 
 ## Notes
 

@@ -200,7 +200,34 @@ class BestScoreVersionTests(unittest.TestCase):
             self.assertEqual(canonical.read_text(encoding="utf-8"), "valid")
             self.assertFalse((working_folder / "submission_clean.csv").exists())
 
-    def test_candidate_normalizes_a_valid_alternative_before_submit(self) -> None:
+    def test_discovery_relay_completes_when_no_output_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            source_folder = folder / "source"
+            working_folder = folder / "working"
+            source_folder.mkdir()
+            working_folder.mkdir()
+            notebook = kaggle_harvest.relay_notebook_document(
+                f"{SOURCE_KERNEL}/25",
+                [],
+                self.competition.file_pattern,
+            )
+            code = notebook["cells"][0]["source"].replace(
+                'Path("/kaggle/working")',
+                f"Path({str(working_folder)!r})",
+            )
+            fake_kagglehub = SimpleNamespace(
+                notebook_output_download=lambda _handle: source_folder
+            )
+
+            with patch.dict(sys.modules, {"kagglehub": fake_kagglehub}):
+                exec(compile(code, "relay.ipynb", "exec"), {})
+
+            self.assertEqual(list(working_folder.iterdir()), [])
+
+    def test_candidate_rejects_invalid_native_file_without_using_alternative(
+        self,
+    ) -> None:
         report = {
             "competition": self.competition.slug,
             "enabled": True,
@@ -210,6 +237,7 @@ class BestScoreVersionTests(unittest.TestCase):
             "kernels_seen": 0,
             "candidates": [],
             "submitted": [],
+            "rejected_sources": [],
             "skipped": [],
             "errors": [],
         }
@@ -217,21 +245,18 @@ class BestScoreVersionTests(unittest.TestCase):
             "schema_version": 1,
             "submissions": [],
             "failed_submissions": [],
+            "rejected_sources": [],
         }
         source_ref = f"{SOURCE_KERNEL}/25"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
             raw_folder = folder / "raw"
-            canonical_folder = folder / "canonical"
             raw_folder.mkdir()
-            canonical_folder.mkdir()
             submission = raw_folder / "submission.csv"
             cleaned = raw_folder / "submission_clean.csv"
-            canonical = canonical_folder / "submission.csv"
             submission.touch()
             cleaned.touch()
-            canonical.touch()
 
             with (
                 patch.object(
@@ -247,10 +272,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    side_effect=[
-                        ("example/relay", "1", source_ref),
-                        ("example/relay", "2", source_ref),
-                    ],
+                    return_value=("example/relay", "1", source_ref),
                 ) as run_mock,
                 patch.object(
                     kaggle_harvest,
@@ -259,10 +281,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "download_output",
-                    side_effect=[
-                        [cleaned, submission],
-                        [canonical],
-                    ],
+                    return_value=[cleaned, submission],
                 ),
                 patch.object(
                     kaggle_harvest,
@@ -273,7 +292,11 @@ class BestScoreVersionTests(unittest.TestCase):
                         else []
                     ),
                 ),
-                patch.object(kaggle_harvest, "sha256_file", return_value="abc"),
+                patch.object(
+                    kaggle_harvest,
+                    "sha256_file",
+                    return_value="bad-hash",
+                ),
                 patch.object(
                     kaggle_harvest,
                     "submit_file",
@@ -290,36 +313,92 @@ class BestScoreVersionTests(unittest.TestCase):
                     report=report,
                 )
 
-        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(run_mock.call_count, 1)
         self.assertEqual(
             run_mock.call_args_list[0].kwargs["output_files"],
             [],
         )
-        self.assertEqual(
-            run_mock.call_args_list[1].kwargs["output_files"],
-            ["submission_clean.csv"],
-        )
-        self.assertEqual(
-            run_mock.call_args_list[1].kwargs["canonical_output_name"],
-            "submission.csv",
-        )
-        self.assertEqual(wait_mock.call_count, 2)
-        submit_mock.assert_called_once()
-        self.assertEqual(submit_mock.call_args.args[2], canonical)
-        self.assertEqual(submit_mock.call_args.kwargs["kernel_version"], "2")
-        self.assertEqual(
-            report["submitted"][0]["file_name"],
-            "submission.csv",
-        )
-        self.assertEqual(
-            report["submitted"][0]["source_file_name"],
-            "submission_clean.csv",
-        )
-        self.assertEqual(report["submitted"][0]["submission_ref"], 123)
+        self.assertEqual(wait_mock.call_count, 1)
+        submit_mock.assert_not_called()
+        self.assertEqual(report["submitted"], [])
         self.assertEqual(
             report["candidates"][0]["matching_files"],
             ["submission.csv", "submission_clean.csv"],
         )
+        self.assertEqual(len(state["rejected_sources"]), 1)
+        self.assertEqual(
+            state["rejected_sources"][0]["source_kernel_ref"],
+            source_ref,
+        )
+        self.assertEqual(
+            state["rejected_sources"][0]["file_name"],
+            "submission.csv",
+        )
+        self.assertEqual(state["rejected_sources"][0]["sha256"], "bad-hash")
+
+    def test_candidate_without_submission_output_is_persistently_rejected(
+        self,
+    ) -> None:
+        report = {
+            "competition": self.competition.slug,
+            "enabled": True,
+            "auto_submit": True,
+            "sort_by": "scoreDescending",
+            "dry_run": False,
+            "kernels_seen": 0,
+            "candidates": [],
+            "submitted": [],
+            "rejected_sources": [],
+            "skipped": [],
+            "errors": [],
+        }
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        source_ref = f"{SOURCE_KERNEL}/25"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": SOURCE_KERNEL}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    return_value=(source_ref, "best-score", 330025000),
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    return_value=("example/relay", "1", source_ref),
+                ),
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(kaggle_harvest, "download_output", return_value=[]),
+                patch.object(kaggle_harvest, "submit_file") as submit_mock,
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        submit_mock.assert_not_called()
+        self.assertEqual(len(state["rejected_sources"]), 1)
+        self.assertEqual(
+            state["rejected_sources"][0]["source_kernel_ref"],
+            source_ref,
+        )
+        self.assertIn("no matching submission", report["skipped"][0])
 
     def test_cell_tracking_validation_rejects_negative_sentinel_nodes(self) -> None:
         shape = {"test_dataset": (2, 3, 4, 5)}
@@ -531,8 +610,22 @@ class BestScoreVersionTests(unittest.TestCase):
                 f"{SOURCE_KERNEL}/26",
             )
         )
+        self.assertTrue(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                f"{SOURCE_KERNEL}/25",
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                f"{SOURCE_KERNEL}/26",
+            )
+        )
 
-    def test_failed_scoring_counts_toward_quota_but_allows_source_retry(self) -> None:
+    def test_failed_scoring_counts_toward_quota_and_blocks_source_retry(self) -> None:
         now = kaggle_harvest.utc_now()
         source_ref = f"{SOURCE_KERNEL}/25"
         state = {
@@ -561,6 +654,101 @@ class BestScoreVersionTests(unittest.TestCase):
                 source_ref,
             )
         )
+        self.assertTrue(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                source_ref,
+            )
+        )
+
+    def test_attempted_hash_in_failed_or_rejected_state_is_skipped(self) -> None:
+        state = {
+            "submissions": [],
+            "failed_submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "sha256": "ABC123",
+                }
+            ],
+            "rejected_sources": [
+                {
+                    "competition": self.competition.slug,
+                    "sha256": "def456",
+                }
+            ],
+        }
+
+        self.assertTrue(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                "abc123",
+            )
+        )
+        self.assertTrue(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                "DEF456",
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                "new-hash",
+            )
+        )
+
+    def test_harvester_does_not_relay_a_failed_source_version_again(self) -> None:
+        source_ref = f"{SOURCE_KERNEL}/25"
+        state = {
+            "submissions": [],
+            "failed_submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": source_ref,
+                }
+            ],
+            "rejected_sources": [],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "list_kernels",
+                return_value=[{"ref": SOURCE_KERNEL}],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "resolved_source_kernel",
+                return_value=(source_ref, "best-score", 330025000),
+            ),
+            patch.object(
+                kaggle_harvest,
+                "copy_and_run_public_kernel",
+            ) as run_mock,
+        ):
+            kaggle_harvest.process_auto_copy_code_submission(
+                self.competition,
+                state=state,
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=True,
+                now=kaggle_harvest.utc_now(),
+                report=report,
+            )
+
+        run_mock.assert_not_called()
+        self.assertIn(f"already attempted source {source_ref}", report["skipped"])
 
     def test_real_run_without_submission_is_reported_as_failure(self) -> None:
         report = {
