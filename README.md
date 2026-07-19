@@ -3,8 +3,8 @@
 A small GitHub Actions-friendly tool that scans public Kaggle kernels for one
 or more competitions, finds matching submission files, and optionally submits
 them with the Kaggle CLI/API. For notebook-only competitions, it can copy the
-selected public notebook output through a small private relay notebook in your
-Kaggle account, then submit the resulting owned notebook version.
+selected public notebook source into a private notebook in your Kaggle account,
+run the full notebook, validate its new output, and submit that owned version.
 
 The default mode is dry-run. Real submissions require both:
 
@@ -21,7 +21,7 @@ license expectations, and daily submission limits.
 - `.github/workflows/kaggle-harvest.yml` - scheduled/manual GitHub Actions workflow
 - `state/harvester-state.json` - tracked state, created by the tool after real submissions
 - `submissions/` - downloaded kernel outputs, ignored by git
-- `work/` - temporary generated relay notebooks, ignored by git
+- `work/` - temporary cloned notebook sources, ignored by git
 - `logs/` - local run logs, ignored by git and uploaded as workflow artifacts
 
 ## Local setup
@@ -91,7 +91,7 @@ The workflow is configured with:
 
 - manual runs via `workflow_dispatch`
 - scheduled real submits at 08:00 and 20:00 Vietnam time
-- at most 1 submission per scheduled run and 2 submissions per day
+- at most 1 submission per run and a local guardrail of 5 submissions per day
 
 GitHub Actions cron uses UTC, so the workflow contains:
 
@@ -122,37 +122,36 @@ Before pushing, the main values to review are:
 - `sort_by = "scoreDescending"` - scan public kernels from highest score downward
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
-- `auto_copy_notebook = true` - create a private relay notebook that mounts the selected exact public notebook version, resolves that version's output with `kagglehub`, copies its matching output, runs, and submits the owned relay version
+- `auto_copy_notebook = true` - clone the selected public notebook's full source into a private notebook, preserve its Kaggle inputs and accelerator settings, run it, validate the newly generated output, and submit the owned version
 - `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty for automatic best-score version resolution
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
-- `notebook_wait_timeout_seconds = 21600` - maximum wait for the owned relay notebook run
+- `notebook_wait_timeout_seconds = 21600` - maximum wait for the cloned notebook run
 - `submission_wait_timeout_seconds = 1800` - wait for Kaggle's asynchronous scorer before recording success
 - `submission_poll_seconds = 15` - scorer status polling interval
 - `require_public_score = true` - Biohub is successful only after a public score is present
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `submission_file_name = "submission.csv"` - require the public notebook version to produce that exact native output; alternate artifacts are never renamed for submission
-- `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, and edge references
+- `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, edge references, and duplicate node coordinates
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
-- `max_submit_attempts_per_run = 10` - if a relay notebook is rejected or fails, continue downward through the score-sorted list, up to ten new notebook versions per run
+- `max_submit_attempts_per_run = 10` - if a cloned notebook is rejected or fails, continue downward through the score-sorted list, up to ten new notebook versions per run
 - `max_submissions_per_day = 5` - Biohub's daily submission limit and the local guardrail
 
 For Biohub, Kaggle will not let one account submit another user's notebook
-session directly. The workflow avoids that permission error by creating a fresh
-private relay notebook in the Kaggle account represented by
-`KAGGLE_API_TOKEN`. The relay mounts the selected exact public notebook version
-as `kernel_sources`, copies its submission output into `/kaggle/working`, and
-submits the returned owned kernel version number. It does not need permission to
-download the other author's source code. File matching happens inside the relay
-against the exact mounted version; it does not rely on `kaggle kernels files`,
-which only describes the latest run.
+session directly. The workflow avoids that permission error by downloading the
+public source, rewriting its metadata for a private notebook owned by the
+`KAGGLE_API_TOKEN` account, running the complete notebook, and submitting the
+returned owned kernel version number. It never submits an output-only relay.
 
 For every score-sorted candidate, the workflow reads the public notebook's
 best-score `scriptVersionId`, maps it back to an exact `/versions/N` URL, and
-uses `owner/slug/N` as the relay's pinned kernel input. If that mapping cannot
-be verified, the candidate is skipped; the workflow never silently falls back
-to the latest version. Because Kaggle's kernel-list response can omit
+uses `owner/slug/N` as the immutable candidate identity. Before cloning, the
+workflow verifies that downloaded source is that same version. Kaggle commonly
+allows source download for the current public version but denies historical
+source with `403`; such a candidate is skipped instead of running a different
+version or relaying old output. If the mapping cannot be verified, the candidate
+is also skipped. Because Kaggle's kernel-list response can omit
 `currentVersionNumber` (the SDK then reports `0`), the workflow obtains it from
 the per-kernel metadata endpoint and can discover a safe version bound from the
 public version pages if that endpoint also omits it.

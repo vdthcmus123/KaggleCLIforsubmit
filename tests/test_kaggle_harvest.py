@@ -1,6 +1,5 @@
 import csv
 import json
-import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -119,112 +118,150 @@ class BestScoreVersionTests(unittest.TestCase):
 
     def test_copy_rejects_an_unversioned_source_before_api_use(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "exact version required"):
+            with self.assertRaisesRegex(ValueError, "versioned kernel ref"):
                 kaggle_harvest.copy_and_run_public_kernel(
                     self.competition,
                     SOURCE_KERNEL,
                     work_dir=Path(temp_dir),
-                    output_files=["submission.csv"],
                 )
 
-    def test_relay_kernel_pins_exact_source_version(self) -> None:
+    def test_current_source_version_is_pulled_unversioned_and_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
             source_ref = f"{SOURCE_KERNEL}/25"
-            target_ref = "example/auto-biohub-relay"
-            kaggle_harvest.prepare_output_relay_kernel(
-                folder,
-                comp=self.competition,
-                source_ref=source_ref,
-                target_ref=target_ref,
-                output_files=["submission_clean.csv", "submission.csv"],
-            )
+            api = SimpleNamespace(kernels_pull=Mock())
+            with patch.object(
+                kaggle_harvest,
+                "fetch_kernel_metadata",
+                side_effect=[
+                    {"currentVersionNumber": 25},
+                    {"currentVersionNumber": 25},
+                ],
+            ):
+                pulled_ref = kaggle_harvest.pull_public_kernel_source(
+                    api,
+                    source_ref,
+                    folder,
+                )
 
-            metadata = json.loads(
-                (folder / "kernel-metadata.json").read_text(encoding="utf-8")
-            )
-            notebook = json.loads(
-                (folder / "relay.ipynb").read_text(encoding="utf-8")
-            )
-            self.assertEqual(metadata["id"], target_ref)
-            self.assertEqual(metadata["kernel_sources"], [source_ref])
-            self.assertEqual(
-                metadata["competition_sources"],
-                [self.competition.slug],
-            )
-            self.assertFalse(metadata["enable_gpu"])
-            code = notebook["cells"][0]["source"]
-            compile(code, "relay.ipynb", "exec")
-            self.assertIn("biohub-cell-tracking-blend-preprocessings", code)
-            self.assertIn(
-                "pilkwang/biohub-cell-tracking-blend-preprocessings/versions/25",
-                code,
-            )
-            self.assertIn("submission.csv", code)
-            self.assertIn("submission_clean.csv", code)
+        self.assertEqual(pulled_ref, SOURCE_KERNEL)
+        api.kernels_pull.assert_called_once_with(
+            SOURCE_KERNEL,
+            path=str(folder),
+            metadata=True,
+            quiet=True,
+        )
 
-    def test_relay_can_publish_selected_output_under_required_name(self) -> None:
+    def test_historical_source_is_requested_exactly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
-            source_folder = folder / "source"
-            working_folder = folder / "working"
-            source_folder.mkdir()
-            working_folder.mkdir()
-            (source_folder / "submission.csv").write_text(
-                "invalid",
-                encoding="utf-8",
-            )
-            (source_folder / "submission_clean.csv").write_text(
-                "valid",
-                encoding="utf-8",
-            )
+            source_ref = f"{SOURCE_KERNEL}/25"
+            api = SimpleNamespace(kernels_pull=Mock())
+            with patch.object(
+                kaggle_harvest,
+                "fetch_kernel_metadata",
+                return_value={"currentVersionNumber": 33},
+            ):
+                pulled_ref = kaggle_harvest.pull_public_kernel_source(
+                    api,
+                    source_ref,
+                    folder,
+                )
 
-            notebook = kaggle_harvest.relay_notebook_document(
-                f"{SOURCE_KERNEL}/25",
-                ["submission_clean.csv"],
-                self.competition.file_pattern,
-                "submission.csv",
-            )
-            code = notebook["cells"][0]["source"]
-            code = code.replace(
-                'Path("/kaggle/working")',
-                f"Path({str(working_folder)!r})",
-            )
-            fake_kagglehub = SimpleNamespace(
-                notebook_output_download=lambda _handle: source_folder
-            )
+        self.assertEqual(pulled_ref, source_ref)
+        api.kernels_pull.assert_called_once_with(
+            source_ref,
+            path=str(folder),
+            metadata=True,
+            quiet=True,
+        )
 
-            with patch.dict(sys.modules, {"kagglehub": fake_kagglehub}):
-                exec(compile(code, "relay.ipynb", "exec"), {})
-
-            canonical = working_folder / "submission.csv"
-            self.assertEqual(canonical.read_text(encoding="utf-8"), "valid")
-            self.assertFalse((working_folder / "submission_clean.csv").exists())
-
-    def test_discovery_relay_completes_when_no_output_matches(self) -> None:
+    def test_unavailable_historical_source_is_never_relayed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
-            source_folder = folder / "source"
-            working_folder = folder / "working"
-            source_folder.mkdir()
-            working_folder.mkdir()
-            notebook = kaggle_harvest.relay_notebook_document(
-                f"{SOURCE_KERNEL}/25",
-                [],
-                self.competition.file_pattern,
-            )
-            code = notebook["cells"][0]["source"].replace(
-                'Path("/kaggle/working")',
-                f"Path({str(working_folder)!r})",
-            )
-            fake_kagglehub = SimpleNamespace(
-                notebook_output_download=lambda _handle: source_folder
-            )
+            source_ref = f"{SOURCE_KERNEL}/25"
+            api = SimpleNamespace(kernels_pull=Mock(side_effect=RuntimeError("403")))
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "fetch_kernel_metadata",
+                    return_value={"currentVersionNumber": 33},
+                ),
+                self.assertRaisesRegex(
+                    kaggle_harvest.ExactSourceUnavailableError,
+                    "Refusing to run a different version or relay",
+                ),
+            ):
+                kaggle_harvest.pull_public_kernel_source(
+                    api,
+                    source_ref,
+                    folder,
+                )
 
-            with patch.dict(sys.modules, {"kagglehub": fake_kagglehub}):
-                exec(compile(code, "relay.ipynb", "exec"), {})
+        api.kernels_pull.assert_called_once()
 
-            self.assertEqual(list(working_folder.iterdir()), [])
+    def test_copy_runs_the_downloaded_full_source(self) -> None:
+        source_ref = f"{SOURCE_KERNEL}/25"
+        api = SimpleNamespace(
+            kernels_push=Mock(
+                return_value=SimpleNamespace(
+                    versionNumber=4,
+                    url="https://www.kaggle.com/code/example/copied",
+                    error=None,
+                )
+            )
+        )
+
+        def fake_pull(_api: object, _source_ref: str, destination: Path) -> str:
+            (destination / "source.ipynb").write_text("{}", encoding="utf-8")
+            (destination / "kernel-metadata.json").write_text(
+                json.dumps(
+                    {
+                        "id": SOURCE_KERNEL,
+                        "code_file": "source.ipynb",
+                        "competition_sources": [self.competition.slug],
+                        "dataset_sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return SOURCE_KERNEL
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                patch.object(kaggle_harvest, "kaggle_api", return_value=api),
+                patch.object(
+                    kaggle_harvest,
+                    "kaggle_username",
+                    return_value="example",
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "pull_public_kernel_source",
+                    side_effect=fake_pull,
+                ) as pull_mock,
+            ):
+                target_ref, version, launched_ref = (
+                    kaggle_harvest.copy_and_run_public_kernel(
+                        self.competition,
+                        source_ref,
+                        work_dir=Path(temp_dir),
+                    )
+                )
+                pushed_folder = Path(api.kernels_push.call_args.args[0])
+                metadata = json.loads(
+                    (pushed_folder / "kernel-metadata.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+
+        self.assertEqual(target_ref, metadata["id"])
+        self.assertEqual(version, "4")
+        self.assertEqual(launched_ref, source_ref)
+        self.assertEqual(metadata["source_kernel"], source_ref)
+        self.assertEqual(metadata["code_file"], "source.ipynb")
+        pull_mock.assert_called_once()
+        api.kernels_push.assert_called_once()
 
     def test_candidate_rejects_invalid_native_file_without_using_alternative(
         self,
@@ -273,7 +310,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    return_value=("example/relay", "1", source_ref),
+                    return_value=("example/clone", "1", source_ref),
                 ) as run_mock,
                 patch.object(
                     kaggle_harvest,
@@ -316,8 +353,8 @@ class BestScoreVersionTests(unittest.TestCase):
 
         self.assertEqual(run_mock.call_count, 1)
         self.assertEqual(
-            run_mock.call_args_list[0].kwargs["output_files"],
-            [],
+            run_mock.call_args_list[0].kwargs,
+            {"work_dir": folder},
         )
         self.assertEqual(wait_mock.call_count, 1)
         submit_mock.assert_not_called()
@@ -377,7 +414,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    return_value=("example/relay", "1", source_ref),
+                    return_value=("example/clone", "1", source_ref),
                 ),
                 patch.object(kaggle_harvest, "wait_for_kernel_complete"),
                 patch.object(kaggle_harvest, "download_output", return_value=[]),
@@ -400,6 +437,58 @@ class BestScoreVersionTests(unittest.TestCase):
             source_ref,
         )
         self.assertIn("no matching submission", report["skipped"][0])
+
+    def test_unavailable_exact_source_is_persistently_rejected(self) -> None:
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "rejected_sources": [],
+            "skipped": [],
+            "errors": [],
+        }
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        source_ref = f"{SOURCE_KERNEL}/25"
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "list_kernels",
+                return_value=[{"ref": SOURCE_KERNEL}],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "resolved_source_kernel",
+                return_value=(source_ref, "best-score", 330025000),
+            ),
+            patch.object(
+                kaggle_harvest,
+                "copy_and_run_public_kernel",
+                side_effect=kaggle_harvest.ExactSourceUnavailableError("403"),
+            ),
+        ):
+            kaggle_harvest.process_auto_copy_code_submission(
+                self.competition,
+                state=state,
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=True,
+                now=kaggle_harvest.utc_now(),
+                report=report,
+            )
+
+        self.assertEqual(len(state["rejected_sources"]), 1)
+        self.assertEqual(
+            state["rejected_sources"][0]["source_kernel_ref"],
+            source_ref,
+        )
+        self.assertIn("rejected source", report["skipped"][0])
+        self.assertEqual(report["errors"], [])
 
     def test_cell_tracking_validation_rejects_negative_sentinel_nodes(self) -> None:
         shape = {"test_dataset": (2, 3, 4, 5)}
@@ -439,6 +528,30 @@ class BestScoreVersionTests(unittest.TestCase):
 
         self.assertTrue(any("negative node coordinate t" in error for error in errors))
         self.assertTrue(any("negative node coordinate z" in error for error in errors))
+
+    def test_cell_tracking_validation_rejects_duplicate_node_coordinates(self) -> None:
+        shape = {"test_dataset": (2, 3, 4, 5)}
+        rows = [
+            [0, "test_dataset", "node", 1, 0, 1, 2, 3, -1, -1],
+            [1, "test_dataset", "node", 2, 0, 1, 2, 3, -1, -1],
+            [2, "test_dataset", "edge", -1, -1, -1, -1, -1, 1, 2],
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "submission.csv"
+            with path.open("w", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(kaggle_harvest.CELL_TRACKING_COLUMNS)
+                writer.writerows(rows)
+            errors = kaggle_harvest.validate_submission_file(
+                path,
+                kaggle_harvest.CELL_TRACKING_COLUMNS,
+                shape,
+            )
+
+        self.assertTrue(
+            any("duplicate node coordinate" in error for error in errors)
+        )
 
     def test_submission_poll_rejects_complete_status_with_scoring_error(self) -> None:
         submission = SimpleNamespace(
@@ -524,7 +637,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    return_value=("example/relay", "1", source_ref),
+                    return_value=("example/clone", "1", source_ref),
                 ),
                 patch.object(kaggle_harvest, "wait_for_kernel_complete"),
                 patch.object(
@@ -567,13 +680,13 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(report["submitted"], [])
         self.assertEqual(len(report["failed_submissions"]), 1)
 
-    def test_download_output_removes_files_from_an_older_relay_run(self) -> None:
+    def test_download_output_removes_files_from_an_older_clone_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)
             target = (
                 output_dir
                 / self.competition.slug
-                / "example__auto-biohub-relay"
+                / "example__auto-biohub-clone"
             )
             target.mkdir(parents=True)
             (target / "submission.csv").write_text("stale", encoding="utf-8")
@@ -581,7 +694,7 @@ class BestScoreVersionTests(unittest.TestCase):
             with patch.object(kaggle_harvest, "run_cmd"):
                 downloaded = kaggle_harvest.download_output(
                     self.competition,
-                    "example/auto-biohub-relay",
+                    "example/auto-biohub-clone",
                     output_dir,
                 )
 
@@ -702,7 +815,7 @@ class BestScoreVersionTests(unittest.TestCase):
             )
         )
 
-    def test_harvester_does_not_relay_a_failed_source_version_again(self) -> None:
+    def test_harvester_does_not_clone_a_failed_source_version_again(self) -> None:
         source_ref = f"{SOURCE_KERNEL}/25"
         state = {
             "submissions": [],

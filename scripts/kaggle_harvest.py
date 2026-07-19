@@ -109,6 +109,10 @@ class SubmissionScoringError(RuntimeError):
         )
 
 
+class ExactSourceUnavailableError(RuntimeError):
+    """Raised when Kaggle will not expose the requested notebook source version."""
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -343,6 +347,17 @@ def unversioned_ref(ref: str) -> str:
     if len(parts) == 3 and parts[-1].isdigit():
         parts.pop()
     return "/".join(parts)
+
+
+def parse_versioned_kernel_ref(ref: str) -> tuple[str, int]:
+    normalized = ref.strip().strip("/")
+    parts = normalized.split("/")
+    if len(parts) != 3 or not all(parts[:2]) or not parts[2].isdigit():
+        raise ValueError(f"Expected versioned kernel ref owner/slug/N, got {ref!r}.")
+    version = int(parts[2])
+    if version <= 0:
+        raise ValueError(f"Kernel version must be positive, got {ref!r}.")
+    return "/".join(parts[:2]), version
 
 
 def maybe_version_map(value: Any, setting_name: str) -> dict[str, int]:
@@ -932,6 +947,7 @@ def validate_cell_tracking_rows(
     issue_examples: dict[str, str] = {}
     actual_datasets: set[str] = set()
     node_ids: dict[str, set[int]] = defaultdict(set)
+    node_coordinates: dict[str, set[tuple[int, int, int, int]]] = defaultdict(set)
     edges: list[tuple[int, str, int, int]] = []
     row_count = 0
 
@@ -1010,6 +1026,15 @@ def validate_cell_tracking_rows(
                                     f"node coordinate {column} out of bounds",
                                     f"CSV line {csv_line}: {values[column]} >= {size}",
                                 )
+                    coordinate = tuple(
+                        values[column] for column in ("t", "z", "y", "x")
+                    )
+                    if coordinate in node_coordinates[dataset]:
+                        issue(
+                            "duplicate node coordinate",
+                            f"CSV line {csv_line}: {dataset}/{coordinate}",
+                        )
+                    node_coordinates[dataset].add(coordinate)
                     if values["source_id"] != -1 or values["target_id"] != -1:
                         issue(
                             "node source/target must be -1",
@@ -1472,165 +1497,56 @@ def invalid_push_sources(result: Any) -> list[str]:
     return invalid
 
 
-def relay_notebook_document(
+def pull_public_kernel_source(
+    api: Any,
     source_ref: str,
-    output_files: list[str],
-    file_pattern: str,
-    canonical_output_name: str | None = None,
-) -> dict[str, Any]:
-    source_owner, source_slug, source_version = source_ref.split("/", 2)
-    source_handle = f"{source_owner}/{source_slug}/versions/{source_version}"
-    expected_names = sorted({Path(name).name for name in output_files})
-
-    code = f'''from pathlib import Path
-import re
-import shutil
-
-source_handle = {source_handle!r}
-source_owner = {source_owner!r}
-source_slug = {source_slug!r}
-expected_names = {expected_names!r}
-file_pattern = {file_pattern!r}
-canonical_output_name = {canonical_output_name!r}
-input_root = Path("/kaggle/input")
-
-source_roots = []
-try:
-    import kagglehub
-
-    resolved = Path(kagglehub.notebook_output_download(source_handle))
-    source_roots = [resolved if resolved.is_dir() else resolved.parent]
-    print(f"Resolved exact notebook output {{source_handle}} at {{resolved}}")
-except Exception as exc:
-    print(f"kagglehub resolution failed: {{exc!r}}")
-
-if not source_roots:
-    direct_candidates = [
-        input_root / source_slug,
-        input_root / source_owner / source_slug,
-        input_root / "notebooks" / source_owner / source_slug,
-        input_root / "kernels" / source_owner / source_slug,
-    ]
-    source_roots = [path for path in direct_candidates if path.is_dir()]
-
-if not source_roots:
-    available = sorted(path.name for path in input_root.iterdir() if path.is_dir())
-    raise FileNotFoundError(
-        f"Could not find exact notebook output {{source_handle!r}}. "
-        f"Available inputs: {{available}}"
-    )
-
-pattern = re.compile(file_pattern)
-candidates = sorted(
-    (
-        path
-        for root in source_roots
-        for path in root.rglob("*")
-        if path.is_file()
-        and (
-            path.name in expected_names
-            if expected_names
-            else pattern.search(path.name)
+    destination: Path,
+) -> str:
+    base_ref, requested_version = parse_versioned_kernel_ref(source_ref)
+    current_version: int | None = None
+    try:
+        current_version = current_kernel_version(
+            fetch_kernel_metadata(base_ref, api=api)
         )
-    ),
-    key=lambda path: (
-        path.name.lower() != "submission.csv",
-        path.name.lower(),
-        len(path.parts),
-        str(path),
-    ),
-)
-copied = []
-if canonical_output_name:
-    candidates = candidates[:1]
-for source in candidates:
-    destination = Path("/kaggle/working") / (
-        canonical_output_name or source.name
-    )
-    if destination.exists():
-        continue
-    shutil.copy2(source, destination)
-    copied.append(str(destination))
-    print(f"Relayed {{source}} -> {{destination}}")
-
-if not copied:
-    message = f"No output matched {{file_pattern!r}} or {{expected_names}}"
-    if expected_names or canonical_output_name:
-        raise FileNotFoundError(message)
-    print(message)
-print(f"Relay complete: {{copied}}")
-'''
-    return {
-        "cells": [
-            {
-                "cell_type": "code",
-                "execution_count": None,
-                "metadata": {},
-                "outputs": [],
-                "source": code,
-            }
-        ],
-        "metadata": {
-            "kernelspec": {
-                "display_name": "Python 3",
-                "language": "python",
-                "name": "python3",
-            },
-            "language_info": {"name": "python", "version": "3.11"},
-        },
-        "nbformat": 4,
-        "nbformat_minor": 5,
-    }
-
-
-def prepare_output_relay_kernel(
-    folder: Path,
-    *,
-    comp: Competition,
-    source_ref: str,
-    target_ref: str,
-    output_files: list[str],
-    canonical_output_name: str | None = None,
-) -> None:
-    base_ref = unversioned_ref(source_ref)
-    if source_ref == base_ref:
-        raise ValueError(
-            f"Refusing to relay unversioned notebook {source_ref}; exact version required."
+    except Exception as exc:  # noqa: BLE001 - exact pull remains a valid fallback.
+        print(
+            f"Could not verify the current source version for {base_ref}: "
+            f"{error_text(exc)}"
         )
-    if canonical_output_name and Path(canonical_output_name).name != canonical_output_name:
-        raise ValueError("canonical_output_name must be a file name, not a path.")
 
-    code_file = "relay.ipynb"
-    notebook = relay_notebook_document(
-        source_ref,
-        output_files,
-        comp.file_pattern,
-        canonical_output_name,
-    )
-    (folder / code_file).write_text(
-        json.dumps(notebook, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    metadata = {
-        "id": target_ref,
-        "title": target_ref.split("/", 1)[1],
-        "code_file": code_file,
-        "language": "python",
-        "kernel_type": "notebook",
-        "is_private": True,
-        "enable_gpu": False,
-        "enable_tpu": False,
-        "enable_internet": False,
-        "dataset_sources": [],
-        "competition_sources": [comp.slug],
-        "kernel_sources": [source_ref],
-        "model_sources": [],
-        "source_kernel": source_ref,
-    }
-    (folder / "kernel-metadata.json").write_text(
-        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    pull_ref = base_ref if current_version == requested_version else source_ref
+    print(f"+ kaggle kernels pull {pull_ref} -p {destination} -m")
+    try:
+        api.kernels_pull(
+            pull_ref,
+            path=str(destination),
+            metadata=True,
+            quiet=True,
+        )
+    except Exception as exc:
+        if pull_ref == source_ref:
+            current_detail = (
+                f"; Kaggle currently exposes V{current_version}"
+                if current_version is not None
+                else ""
+            )
+            raise ExactSourceUnavailableError(
+                f"Kaggle would not provide source for exact version "
+                f"{source_ref}{current_detail}. Refusing to run a different "
+                "version or relay an old output."
+            ) from exc
+        raise
+
+    if pull_ref == base_ref:
+        after_version = current_kernel_version(
+            fetch_kernel_metadata(base_ref, api=api)
+        )
+        if after_version != requested_version:
+            raise ExactSourceUnavailableError(
+                f"{base_ref} changed from requested V{requested_version} to "
+                f"V{after_version or 'unknown'} while its source was downloaded."
+            )
+    return pull_ref
 
 
 def copy_and_run_public_kernel(
@@ -1638,14 +1554,8 @@ def copy_and_run_public_kernel(
     source_ref: str,
     *,
     work_dir: Path,
-    output_files: list[str],
-    canonical_output_name: str | None = None,
 ) -> tuple[str, str, str]:
-    base_ref = unversioned_ref(source_ref)
-    if source_ref == base_ref:
-        raise ValueError(
-            f"Refusing to copy unversioned notebook {source_ref}; exact version required."
-        )
+    base_ref, _ = parse_versioned_kernel_ref(source_ref)
     api = kaggle_api()
     owner = kaggle_username(api)
     target_ref = owned_kernel_ref(comp, base_ref, owner)
@@ -1654,20 +1564,16 @@ def copy_and_run_public_kernel(
         shutil.rmtree(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    prepare_output_relay_kernel(
+    pull_public_kernel_source(api, source_ref, local_dir)
+    rewrite_kernel_metadata(
         local_dir,
         comp=comp,
-        source_ref=source_ref,
+        public_ref=source_ref,
         target_ref=target_ref,
-        output_files=output_files,
-        canonical_output_name=canonical_output_name,
     )
 
     timeout = comp.kernel_session_timeout_seconds
-    print(
-        f"+ kaggle kernels push -p {local_dir} "
-        f"# relay outputs from {source_ref}"
-    )
+    print(f"+ kaggle kernels push -p {local_dir} # full source from {source_ref}")
     result = api.kernels_push(str(local_dir), timeout=timeout)
     error = maybe_str(getattr(result, "error", None))
     if error:
@@ -1968,6 +1874,7 @@ def process_auto_copy_code_submission(
             "source_kernel_ref": source_ref,
             "version_resolution": version_resolution,
             "source_session_id": source_session_id,
+            "execution_mode": "full-source-clone",
             "file_pattern": comp.file_pattern,
             "matching_files": [],
         }
@@ -1979,7 +1886,7 @@ def process_auto_copy_code_submission(
 
         if not submit:
             report["skipped"].append(
-                f"dry-run would relay {source_ref} and submit files matching "
+                f"dry-run would clone and run {source_ref}, then submit files matching "
                 f"{comp.file_pattern}"
             )
             continue
@@ -1991,7 +1898,6 @@ def process_auto_copy_code_submission(
                     comp,
                     source_ref,
                     work_dir=work_dir,
-                    output_files=[],
                 )
             )
             wait_for_kernel_complete(
@@ -2000,25 +1906,38 @@ def process_auto_copy_code_submission(
                 poll_seconds=comp.notebook_poll_seconds,
             )
             downloaded = download_output(comp, owned_ref, output_dir)
+        except ExactSourceUnavailableError as exc:
+            reason = error_text(exc)
+            rejected = remember_rejected_source(
+                state,
+                comp=comp,
+                source_kernel_ref=source_ref,
+                reason=reason,
+            )
+            report.setdefault("rejected_sources", []).append(rejected)
+            report["skipped"].append(
+                f"rejected source {source_ref}: {reason}"
+            )
+            continue
         except Exception as exc:  # noqa: BLE001 - try the next scored notebook.
             report["errors"].append(
                 {
                     "kernel": source_ref,
-                    "stage": "relay notebook",
+                    "stage": "clone and run notebook",
                     "error": error_text(exc),
                 }
             )
             continue
 
-        relay_outputs = sorted(
+        notebook_outputs = sorted(
             (path for path in downloaded if pattern.search(path.name)),
             key=lambda path: (
                 path.name.lower() != "submission.csv",
                 path.name.lower(),
             ),
         )
-        if not relay_outputs:
-            reason = "relay notebook produced no matching submission file"
+        if not notebook_outputs:
+            reason = "cloned notebook produced no matching submission file"
             rejected = remember_rejected_source(
                 state,
                 comp=comp,
@@ -2030,12 +1949,14 @@ def process_auto_copy_code_submission(
                 f"rejected source {launched_source_ref}: {reason}"
             )
             continue
-        candidate_report["matching_files"] = [path.name for path in relay_outputs]
+        candidate_report["matching_files"] = [
+            path.name for path in notebook_outputs
+        ]
 
         if comp.submission_file_name:
             native_outputs = [
                 path
-                for path in relay_outputs
+                for path in notebook_outputs
                 if path.name == comp.submission_file_name
             ]
             if not native_outputs:
@@ -2054,9 +1975,9 @@ def process_auto_copy_code_submission(
                     f"rejected source {launched_source_ref}: {reason}"
                 )
                 continue
-            relay_outputs = native_outputs[:1]
+            notebook_outputs = native_outputs[:1]
 
-        for selected in relay_outputs:
+        for selected in notebook_outputs:
             source_file_name = selected.name
             submission_path = selected
             submission_kernel_ref = owned_ref
@@ -2146,7 +2067,7 @@ def process_auto_copy_code_submission(
                     {
                         "kernel": launched_source_ref,
                         "file": source_file_name,
-                        "stage": "submit relay output",
+                        "stage": "submit cloned notebook output",
                         "error": err,
                     }
                 )
