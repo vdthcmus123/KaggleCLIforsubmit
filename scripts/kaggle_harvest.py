@@ -35,6 +35,9 @@ SCRIPT_VERSION_ID_RE = re.compile(
     r"scriptVersionId(?:%3D|=)(\d+)",
     re.IGNORECASE,
 )
+COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
+EXACT_SCORE_COPY_MODE = "competition-code-score-copy"
+KAGGLE_WEB_BASE = "https://www.kaggle.com"
 
 
 @dataclass(frozen=True)
@@ -111,6 +114,67 @@ class SubmissionScoringError(RuntimeError):
 
 class ExactSourceUnavailableError(RuntimeError):
     """Raised when Kaggle will not expose the requested notebook source version."""
+
+
+class KaggleWebClient:
+    """Small client for the public web endpoints used by Kaggle's Code tab."""
+
+    def __init__(self, session: Any | None = None) -> None:
+        if session is None:
+            import requests  # type: ignore[import-not-found]
+
+            session = requests.Session()
+        self.session = session
+        self.referer: str | None = None
+
+    @staticmethod
+    def _headers(*, accept: str, referer: str, xsrf_token: str) -> dict[str, str]:
+        return {
+            "Accept": accept,
+            "Origin": KAGGLE_WEB_BASE,
+            "Referer": referer,
+            "User-Agent": "KagglePublicSubmitter/1.0",
+            "X-XSRF-TOKEN": xsrf_token,
+        }
+
+    def get_text(self, url: str) -> str:
+        response = self.session.get(
+            url,
+            headers={"User-Agent": "KagglePublicSubmitter/1.0"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        self.referer = response.url
+        return response.text
+
+    def _post(self, endpoint: str, payload: dict[str, Any], *, accept: str) -> Any:
+        if self.referer is None:
+            raise RuntimeError("Kaggle web client must load a public page first.")
+        xsrf_token = self.session.cookies.get("XSRF-TOKEN")
+        if not xsrf_token:
+            raise RuntimeError("Kaggle did not issue an XSRF token.")
+        response = self.session.post(
+            f"{KAGGLE_WEB_BASE}/api/i/kernels.KernelsService/{endpoint}",
+            json=payload,
+            headers=self._headers(
+                accept=accept,
+                referer=self.referer,
+                xsrf_token=xsrf_token,
+            ),
+            timeout=60,
+        )
+        response.raise_for_status()
+        return response
+
+    def post_json(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._post(endpoint, payload, accept="application/json")
+        result = response.json()
+        if not isinstance(result, dict):
+            raise ValueError(f"Kaggle {endpoint} returned a non-object response.")
+        return result
+
+    def post_bytes(self, endpoint: str, payload: dict[str, Any]) -> bytes:
+        return bytes(self._post(endpoint, payload, accept="*/*").content)
 
 
 def utc_now() -> datetime:
@@ -543,7 +607,92 @@ def kernel_metadata_row(metadata: Any) -> dict[str, Any]:
     return row
 
 
+def competition_id_from_html(html: str) -> int:
+    match = COMPETITION_ID_RE.search(html)
+    if not match:
+        raise ValueError("Kaggle competition page did not expose its numeric ID.")
+    return int(match.group(1))
+
+
+def competition_code_list_request(
+    comp: Competition,
+    competition_id: int,
+) -> dict[str, Any]:
+    if comp.sort_by != "scoreDescending":
+        raise ValueError(
+            "Exact Competition Code selection requires sort_by='scoreDescending'."
+        )
+    return {
+        "kernelFilterCriteria": {
+            "search": comp.search or "",
+            "listRequest": {
+                "competitionId": competition_id,
+                "sortBy": "SCORE_DESCENDING",
+                "pageSize": min(max(comp.top_n, 1), 100),
+                "group": "EVERYONE",
+                "page": 1,
+                "modelIds": [],
+                "modelInstanceIds": [],
+                "excludeKernelIds": [],
+                "tagIds": "",
+                "excludeResultsFilesOutputs": False,
+                "wantOutputFiles": False,
+                "excludeNonAccessedDatasources": True,
+            },
+        },
+        "detailFilterCriteria": {
+            "deletedAccessBehavior": "RETURN_NOTHING",
+            "unauthorizedAccessBehavior": "RETURN_NOTHING",
+            "excludeResultsFilesOutputs": False,
+            "wantOutputFiles": False,
+            "kernelIds": [],
+            "outputFileTypes": [],
+            "includeInvalidDataSources": False,
+        },
+        "readMask": "pinnedKernels",
+    }
+
+
+def list_competition_code_kernels(
+    comp: Competition,
+    *,
+    web_client: KaggleWebClient | None = None,
+) -> list[dict[str, Any]]:
+    client = web_client or KaggleWebClient()
+    page_url = f"{KAGGLE_WEB_BASE}/competitions/{comp.slug}/code"
+    html = client.get_text(page_url)
+    competition_id = competition_id_from_html(html)
+    print(
+        "+ Kaggle Competition Code list "
+        f"{comp.slug} --sort-by Public-Score-descending --unpinned"
+    )
+    result = client.post_json(
+        "ListKernels",
+        competition_code_list_request(comp, competition_id),
+    )
+    raw_kernels = result.get("kernels") or []
+    if not isinstance(raw_kernels, list):
+        raise ValueError("Kaggle Competition Code response has invalid kernels data.")
+
+    rows: list[dict[str, Any]] = []
+    for raw in raw_kernels:
+        if not isinstance(raw, dict):
+            continue
+        script_url = maybe_str(raw.get("scriptUrl"))
+        match = re.search(r"/code/([^/\s]+/[^/\s?#]+)", script_url or "")
+        if not match:
+            continue
+        row = dict(raw)
+        row["ref"] = match.group(1)
+        row["kernelId"] = raw.get("id")
+        rows.append(row)
+    return rows
+
+
 def list_kernels(comp: Competition) -> list[dict[str, Any]]:
+    if comp.code_competition and comp.auto_copy_notebook:
+        return list_competition_code_kernels(comp)
+
     args = [
         "kaggle",
         "kernels",
@@ -742,6 +891,58 @@ def resolve_best_score_version(
     )
 
 
+def required_positive_int(value: Any, field_name: str) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Kaggle did not expose a valid {field_name}.") from exc
+    if result <= 0:
+        raise ValueError(f"Kaggle did not expose a valid {field_name}.")
+    return result
+
+
+def resolve_competition_code_version(
+    row: dict[str, Any],
+    *,
+    web_client: KaggleWebClient | None = None,
+) -> tuple[int, int]:
+    ref = kernel_ref(row)
+    if not ref:
+        raise ValueError("Could not find kernel ref in Competition Code row.")
+    kernel_id = required_positive_int(row.get("kernelId"), "kernelId")
+    session_id = required_positive_int(
+        row.get("scriptVersionId"),
+        "score-linked scriptVersionId",
+    )
+
+    client = web_client or KaggleWebClient()
+    client.get_text(notebook_page_url(ref))
+    response = client.post_json(
+        "ListKernelVersions",
+        {"kernelId": kernel_id, "sortOption": "VERSION_ID"},
+    )
+    items = response.get("items") or []
+    if not isinstance(items, list):
+        raise ValueError("Kaggle returned invalid notebook version data.")
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        run = item.get("run") or {}
+        version = item.get("version") or {}
+        if int(run.get("id") or 0) != session_id:
+            continue
+        version_number = required_positive_int(
+            version.get("versionNumber"),
+            "score-linked versionNumber",
+        )
+        return version_number, session_id
+
+    raise RuntimeError(
+        f"Kaggle's score card points to session {session_id}, but that session "
+        f"was not found in the public version history for {ref}."
+    )
+
+
 def resolved_source_kernel(
     comp: Competition,
     row: dict[str, Any],
@@ -756,6 +957,15 @@ def resolved_source_kernel(
     configured_version = comp.source_kernel_versions.get(base_ref)
     if configured_version is not None:
         return f"{base_ref}/{configured_version}", "configured", None
+
+    if row.get("scriptVersionId") is not None:
+        version, session_id = resolve_competition_code_version(row)
+        score = row.get("bestPublicScore")
+        print(
+            f"Selected first unpinned Public Score notebook: {base_ref} -> "
+            f"V{version} (scriptVersionId {session_id}, score {score})"
+        )
+        return f"{base_ref}/{version}", "competition-code-score", session_id
 
     current_version = current_kernel_version(row)
     if current_version is None:
@@ -859,6 +1069,8 @@ def source_kernel_already_attempted(
     state: dict[str, Any],
     competition: str,
     source_ref: str,
+    *,
+    execution_mode: str | None = None,
 ) -> bool:
     attempts = [
         *state.get("submissions", []),
@@ -868,6 +1080,14 @@ def source_kernel_already_attempted(
     return any(
         item.get("competition") == competition
         and item.get("source_kernel_ref") == source_ref
+        and (
+            execution_mode is None
+            or item.get("execution_mode") == execution_mode
+            or (
+                item.get("execution_mode") is None
+                and execution_mode != EXACT_SCORE_COPY_MODE
+            )
+        )
         for item in attempts
     )
 
@@ -876,6 +1096,8 @@ def submission_hash_already_attempted(
     state: dict[str, Any],
     competition: str,
     file_hash: str,
+    *,
+    execution_mode: str | None = None,
 ) -> bool:
     if not file_hash:
         return False
@@ -887,6 +1109,14 @@ def submission_hash_already_attempted(
     return any(
         item.get("competition") == competition
         and str(item.get("sha256", "")).lower() == file_hash.lower()
+        and (
+            execution_mode is None
+            or item.get("execution_mode") == execution_mode
+            or (
+                item.get("execution_mode") is None
+                and execution_mode != EXACT_SCORE_COPY_MODE
+            )
+        )
         for item in attempts
     )
 
@@ -1342,6 +1572,7 @@ def remember_failed_submission(
     error: SubmissionScoringError,
     kernel_version: str | None = None,
     source_kernel_ref: str | None = None,
+    execution_mode: str | None = None,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
         "competition": comp.slug,
@@ -1358,6 +1589,8 @@ def remember_failed_submission(
         record["kernel_version"] = kernel_version
     if source_kernel_ref is not None:
         record["source_kernel_ref"] = source_kernel_ref
+    if execution_mode is not None:
+        record["execution_mode"] = execution_mode
     state.setdefault("failed_submissions", []).append(record)
     return record
 
@@ -1370,6 +1603,7 @@ def remember_rejected_source(
     reason: str,
     file_name: str | None = None,
     file_hash: str | None = None,
+    execution_mode: str | None = None,
 ) -> dict[str, Any]:
     record: dict[str, Any] = {
         "competition": comp.slug,
@@ -1381,6 +1615,8 @@ def remember_rejected_source(
         record["file_name"] = file_name
     if file_hash:
         record["sha256"] = file_hash
+    if execution_mode is not None:
+        record["execution_mode"] = execution_mode
     state.setdefault("rejected_sources", []).append(record)
     return record
 
@@ -1497,6 +1733,199 @@ def invalid_push_sources(result: Any) -> list[str]:
     return invalid
 
 
+def nested_dict(value: Any, *keys: str) -> dict[str, Any]:
+    current = value
+    for key in keys:
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, dict) else {}
+
+
+def resource_ref_from_path(value: Any, resource: str, parts: int) -> str | None:
+    if isinstance(value, dict):
+        for item in value.values():
+            found = resource_ref_from_path(item, resource, parts)
+            if found:
+                return found
+        return None
+    if isinstance(value, list):
+        for item in value:
+            found = resource_ref_from_path(item, resource, parts)
+            if found:
+                return found
+        return None
+    if not isinstance(value, str):
+        return None
+    pattern = rf"/{re.escape(resource)}/" + "/".join(
+        r"([^/\s?#]+)" for _ in range(parts)
+    )
+    match = re.search(pattern, value)
+    return "/".join(match.groups()) if match else None
+
+
+def metadata_sources_from_session(
+    data_sources: list[dict[str, Any]],
+) -> dict[str, list[str]]:
+    result = {
+        "competition_sources": [],
+        "dataset_sources": [],
+        "kernel_sources": [],
+        "model_sources": [],
+    }
+    for source in data_sources:
+        source_type = str(source.get("sourceType") or "").upper()
+        version_info = nested_dict(
+            source,
+            "databundleVersion",
+            "databundleVersionInfo",
+        )
+        version_number = maybe_int(version_info.get("versionNumber"))
+        pinned = bool(source.get("isPinned"))
+
+        if "COMPETITION" in source_type:
+            ref = resource_ref_from_path(source, "competitions", 1)
+            if not ref:
+                ref = maybe_str(source.get("slug"))
+            target = "competition_sources"
+        elif "DATASET" in source_type:
+            ref = resource_ref_from_path(source, "datasets", 2)
+            target = "dataset_sources"
+        elif any(name in source_type for name in ("NOTEBOOK", "KERNEL", "SCRIPT")):
+            ref = resource_ref_from_path(source, "code", 2)
+            target = "kernel_sources"
+        elif "MODEL" in source_type:
+            ref = resource_ref_from_path(source, "models", 4)
+            target = "model_sources"
+        else:
+            raise ExactSourceUnavailableError(
+                f"Unsupported Kaggle input type {source_type or '<missing>'!r}."
+            )
+
+        if not ref:
+            raise ExactSourceUnavailableError(
+                f"Could not resolve exact {source_type} input {source.get('name')!r}."
+            )
+        if pinned and version_number is not None and target != "competition_sources":
+            ref = f"{ref}/{version_number}"
+        result[target].append(ref)
+    return result
+
+
+def machine_shape_for_accelerator(accelerator: str) -> str | None:
+    shapes = {
+        "NVIDIA_TESLA_K80": "NvidiaTeslaK80",
+        "NVIDIA_TESLA_P100": "NvidiaTeslaP100",
+        "NVIDIA_TESLA_T4": "NvidiaTeslaT4",
+        "NVIDIA_TESLA_V100": "NvidiaTeslaV100",
+        "NVIDIA_A100": "NvidiaA100",
+        "NVIDIA_L4": "NvidiaL4",
+        "NVIDIA_L4_X1": "NvidiaL4",
+        "NVIDIA_H100": "NvidiaH100",
+    }
+    return shapes.get(accelerator.upper())
+
+
+def download_exact_public_kernel_source(
+    source_ref: str,
+    source_session_id: int,
+    destination: Path,
+    *,
+    web_client: KaggleWebClient | None = None,
+) -> None:
+    base_ref, requested_version = parse_versioned_kernel_ref(source_ref)
+    client = web_client or KaggleWebClient()
+    client.get_text(notebook_page_url(base_ref, requested_version))
+    response = client.post_json(
+        "GetKernelVersion",
+        {"kernelSessionId": source_session_id, "getDataSources": True},
+    )
+    version_and_run = response.get("kernelVersionAndRun") or {}
+    if not isinstance(version_and_run, dict):
+        raise ExactSourceUnavailableError("Kaggle returned invalid version metadata.")
+    version = version_and_run.get("version") or {}
+    run = version_and_run.get("run") or {}
+    blob = version_and_run.get("blob") or {}
+    if int(run.get("id") or 0) != source_session_id:
+        raise ExactSourceUnavailableError(
+            f"Kaggle returned a different session for {source_ref}."
+        )
+    if int(version.get("versionNumber") or 0) != requested_version:
+        raise ExactSourceUnavailableError(
+            f"Kaggle returned a different version for {source_ref}."
+        )
+
+    settings = blob.get("settings") or {}
+    if not isinstance(settings, dict):
+        raise ExactSourceUnavailableError(
+            f"Kaggle did not expose execution settings for {source_ref}."
+        )
+    source_type = str(settings.get("sourceType") or run.get("sourceType") or "")
+    is_notebook = "NOTEBOOK" in source_type.upper()
+    code_file = "source.ipynb" if is_notebook else "source.py"
+    source = client.post_bytes(
+        "GetKernelSessionSource",
+        {"kernelSessionId": source_session_id},
+    )
+    if not source:
+        raise ExactSourceUnavailableError(
+            f"Kaggle returned empty source for {source_ref}."
+        )
+    if is_notebook:
+        try:
+            notebook = json.loads(source.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ExactSourceUnavailableError(
+                f"Kaggle returned invalid notebook JSON for {source_ref}."
+            ) from exc
+        if not isinstance(notebook, dict) or "cells" not in notebook:
+            raise ExactSourceUnavailableError(
+                f"Kaggle returned invalid notebook JSON for {source_ref}."
+            )
+
+    data_response = client.post_json(
+        "GetKernelSessionDataSources",
+        {"kernelSessionId": source_session_id},
+    )
+    raw_data_sources = data_response.get("dataSources") or []
+    if not isinstance(raw_data_sources, list) or not all(
+        isinstance(item, dict) for item in raw_data_sources
+    ):
+        raise ExactSourceUnavailableError(
+            f"Kaggle returned invalid input metadata for {source_ref}."
+        )
+    sources = metadata_sources_from_session(raw_data_sources)
+
+    accelerator = str(settings.get("accelerator") or "NONE").upper()
+    run_info = run.get("runInfo") or {}
+    metadata: dict[str, Any] = {
+        "id": base_ref,
+        "title": str(run.get("title") or base_ref.split("/", 1)[1]),
+        "code_file": code_file,
+        "language": "python",
+        "kernel_type": "notebook" if is_notebook else "script",
+        "is_private": False,
+        "enable_gpu": "NVIDIA" in accelerator or accelerator == "GPU",
+        "enable_tpu": "TPU" in accelerator,
+        "enable_internet": bool(settings.get("isInternetEnabled", False)),
+        **sources,
+    }
+    docker_digest = maybe_str(run_info.get("dockerImageDigest"))
+    if docker_digest:
+        metadata["docker_image"] = (
+            "gcr.io/kaggle-private-byod/python@sha256:" + docker_digest
+        )
+    machine_shape = machine_shape_for_accelerator(accelerator)
+    if machine_shape:
+        metadata["machine_shape"] = machine_shape
+
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / code_file).write_bytes(source)
+    with (destination / "kernel-metadata.json").open("w", encoding="utf-8") as fh:
+        json.dump(metadata, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+
 def pull_public_kernel_source(
     api: Any,
     source_ref: str,
@@ -1554,6 +1983,7 @@ def copy_and_run_public_kernel(
     source_ref: str,
     *,
     work_dir: Path,
+    source_session_id: int | None = None,
 ) -> tuple[str, str, str]:
     base_ref, _ = parse_versioned_kernel_ref(source_ref)
     api = kaggle_api()
@@ -1564,7 +1994,18 @@ def copy_and_run_public_kernel(
         shutil.rmtree(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    pull_public_kernel_source(api, source_ref, local_dir)
+    if source_session_id is None:
+        pull_public_kernel_source(api, source_ref, local_dir)
+    else:
+        print(
+            "+ Kaggle Copy & Edit exact score session "
+            f"{source_ref} (scriptVersionId {source_session_id})"
+        )
+        download_exact_public_kernel_source(
+            source_ref,
+            source_session_id,
+            local_dir,
+        )
     rewrite_kernel_metadata(
         local_dir,
         comp=comp,
@@ -1846,7 +2287,9 @@ def process_auto_copy_code_submission(
     kernels = list_kernels(comp)
     report["kernels_seen"] = len(kernels)
 
-    for row in kernels:
+    # Match the Competition Code page: pinned notebooks are separate, and only
+    # the first unpinned result in Public Score order is eligible for this run.
+    for row in kernels[:1]:
         if submit and (remaining_run <= 0 or remaining_attempts <= 0):
             break
 
@@ -1859,7 +2302,7 @@ def process_auto_copy_code_submission(
             source_ref, version_resolution, source_session_id = (
                 resolved_source_kernel(comp, row)
             )
-        except Exception as exc:  # noqa: BLE001 - skip unverifiable notebooks.
+        except Exception as exc:  # noqa: BLE001 - report an unverifiable top result.
             report["errors"].append(
                 {
                     "kernel": ref,
@@ -1869,18 +2312,28 @@ def process_auto_copy_code_submission(
             )
             continue
 
+        execution_mode = (
+            EXACT_SCORE_COPY_MODE
+            if version_resolution == "competition-code-score"
+            else "full-source-clone"
+        )
         candidate_report = {
             "kernel": ref,
             "source_kernel_ref": source_ref,
             "version_resolution": version_resolution,
             "source_session_id": source_session_id,
-            "execution_mode": "full-source-clone",
+            "execution_mode": execution_mode,
             "file_pattern": comp.file_pattern,
             "matching_files": [],
         }
         report["candidates"].append(candidate_report)
 
-        if source_kernel_already_attempted(state, comp.slug, source_ref):
+        if source_kernel_already_attempted(
+            state,
+            comp.slug,
+            source_ref,
+            execution_mode=execution_mode,
+        ):
             report["skipped"].append(f"already attempted source {source_ref}")
             continue
 
@@ -1893,12 +2346,11 @@ def process_auto_copy_code_submission(
 
         remaining_attempts -= 1
         try:
+            copy_kwargs: dict[str, Any] = {"work_dir": work_dir}
+            if version_resolution == "competition-code-score":
+                copy_kwargs["source_session_id"] = source_session_id
             owned_ref, owned_version, launched_source_ref = (
-                copy_and_run_public_kernel(
-                    comp,
-                    source_ref,
-                    work_dir=work_dir,
-                )
+                copy_and_run_public_kernel(comp, source_ref, **copy_kwargs)
             )
             wait_for_kernel_complete(
                 owned_ref,
@@ -1913,13 +2365,14 @@ def process_auto_copy_code_submission(
                 comp=comp,
                 source_kernel_ref=source_ref,
                 reason=reason,
+                execution_mode=execution_mode,
             )
             report.setdefault("rejected_sources", []).append(rejected)
             report["skipped"].append(
                 f"rejected source {source_ref}: {reason}"
             )
             continue
-        except Exception as exc:  # noqa: BLE001 - try the next scored notebook.
+        except Exception as exc:  # noqa: BLE001 - report the top notebook failure.
             report["errors"].append(
                 {
                     "kernel": source_ref,
@@ -1943,6 +2396,7 @@ def process_auto_copy_code_submission(
                 comp=comp,
                 source_kernel_ref=launched_source_ref,
                 reason=reason,
+                execution_mode=execution_mode,
             )
             report.setdefault("rejected_sources", []).append(rejected)
             report["skipped"].append(
@@ -1969,6 +2423,7 @@ def process_auto_copy_code_submission(
                     comp=comp,
                     source_kernel_ref=launched_source_ref,
                     reason=reason,
+                    execution_mode=execution_mode,
                 )
                 report.setdefault("rejected_sources", []).append(rejected)
                 report["skipped"].append(
@@ -2005,6 +2460,7 @@ def process_auto_copy_code_submission(
                             file_name=source_file_name,
                             file_hash=file_hash,
                             reason="; ".join(validation_errors),
+                            execution_mode=execution_mode,
                         )
                         report.setdefault("rejected_sources", []).append(rejected)
                         break
@@ -2014,6 +2470,7 @@ def process_auto_copy_code_submission(
                     state,
                     comp.slug,
                     file_hash,
+                    execution_mode=execution_mode,
                 ):
                     reason = f"submission hash already attempted: {file_hash}"
                     report["skipped"].append(
@@ -2027,6 +2484,7 @@ def process_auto_copy_code_submission(
                             file_name=source_file_name,
                             file_hash=file_hash,
                             reason=reason,
+                            execution_mode=execution_mode,
                         )
                         report.setdefault("rejected_sources", []).append(rejected)
                         break
@@ -2057,6 +2515,7 @@ def process_auto_copy_code_submission(
                     "message": message,
                     "submission_ref": submission_ref,
                     "scoring_status": "complete",
+                    "execution_mode": execution_mode,
                 }
                 state["submissions"].append(record)
                 report["submitted"].append(record)
@@ -2082,6 +2541,7 @@ def process_auto_copy_code_submission(
                         file_hash=file_hash,
                         message=message,
                         error=exc,
+                        execution_mode=execution_mode,
                     )
                     report.setdefault("failed_submissions", []).append(
                         failed_record

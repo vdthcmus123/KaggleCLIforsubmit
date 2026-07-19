@@ -46,7 +46,235 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(self.competition.submission_file_name, "submission.csv")
         self.assertTrue(self.competition.require_public_score)
+        self.assertEqual(self.competition.max_submit_attempts_per_run, 1)
         self.assertEqual(self.competition.max_submissions_per_day, 5)
+
+    def test_competition_code_list_excludes_pinned_and_keeps_ui_order(self) -> None:
+        top = {
+            "id": 127_764_376,
+            "scriptVersionId": 336_369_307,
+            "bestPublicScore": 0.952,
+            "scriptUrl": "/code/boristown/dark-agi-biohub-cell-tracking-solution",
+        }
+        second = {
+            "id": 126_200_290,
+            "scriptVersionId": 335_000_000,
+            "bestPublicScore": 0.95,
+            "scriptUrl": "/code/example/second-notebook",
+        }
+        pinned = {
+            "id": 1,
+            "bestPublicScore": 0.143,
+            "scriptUrl": "/code/example/pinned-getting-started",
+        }
+        client = SimpleNamespace(
+            get_text=Mock(return_value='{"ref":"/Competitions/136605"}'),
+            post_json=Mock(
+                return_value={
+                    "kernels": [top, second],
+                    "pinnedKernels": [pinned],
+                }
+            ),
+        )
+
+        rows = kaggle_harvest.list_competition_code_kernels(
+            self.competition,
+            web_client=client,
+        )
+
+        self.assertEqual(
+            [row["ref"] for row in rows],
+            [
+                "boristown/dark-agi-biohub-cell-tracking-solution",
+                "example/second-notebook",
+            ],
+        )
+        endpoint, request = client.post_json.call_args.args
+        self.assertEqual(endpoint, "ListKernels")
+        self.assertEqual(
+            request["kernelFilterCriteria"]["listRequest"]["competitionId"],
+            136_605,
+        )
+        self.assertEqual(
+            request["kernelFilterCriteria"]["listRequest"]["sortBy"],
+            "SCORE_DESCENDING",
+        )
+
+    def test_competition_code_score_session_resolves_to_exact_version(self) -> None:
+        row = {
+            "ref": "boristown/dark-agi-biohub-cell-tracking-solution",
+            "kernelId": 127_764_376,
+            "scriptVersionId": 336_369_307,
+        }
+        client = SimpleNamespace(
+            get_text=Mock(return_value="notebook page"),
+            post_json=Mock(
+                return_value={
+                    "items": [
+                        {
+                            "run": {"id": 336_500_000},
+                            "version": {"versionNumber": 11},
+                        },
+                        {
+                            "run": {"id": 336_369_307},
+                            "version": {"versionNumber": 7},
+                        },
+                    ]
+                }
+            ),
+        )
+
+        version, session_id = kaggle_harvest.resolve_competition_code_version(
+            row,
+            web_client=client,
+        )
+
+        self.assertEqual((version, session_id), (7, 336_369_307))
+        client.post_json.assert_called_once_with(
+            "ListKernelVersions",
+            {"kernelId": 127_764_376, "sortOption": "VERSION_ID"},
+        )
+
+    def test_exact_score_copy_preserves_source_inputs_and_runtime(self) -> None:
+        source_ref = "boristown/dark-agi-biohub-cell-tracking-solution/7"
+        notebook = b'{"cells": [], "metadata": {}, "nbformat": 4}'
+        digest = "37c64f7dd9c54116ecd1bcc88817c546"
+
+        def post_json(endpoint: str, _payload: dict[str, object]) -> dict:
+            if endpoint == "GetKernelVersion":
+                return {
+                    "kernelVersionAndRun": {
+                        "version": {"versionNumber": 7},
+                        "run": {
+                            "id": 336_369_307,
+                            "title": "Dark-AGI-Biohub Cell Tracking Solution",
+                            "sourceType": "EDITOR_TYPE_NOTEBOOK",
+                            "runInfo": {"dockerImageDigest": digest},
+                        },
+                        "blob": {
+                            "settings": {
+                                "sourceType": "EDITOR_TYPE_NOTEBOOK",
+                                "accelerator": "NVIDIA_TESLA_T4",
+                                "isInternetEnabled": False,
+                            }
+                        },
+                    }
+                }
+            if endpoint == "GetKernelSessionDataSources":
+                return {
+                    "dataSources": [
+                        {
+                            "sourceType": "DATA_SOURCE_TYPE_COMPETITION",
+                            "sourceUrl": (
+                                "/competitions/"
+                                "biohub-cell-tracking-during-development"
+                            ),
+                            "isPinned": False,
+                            "databundleVersion": {
+                                "databundleVersionInfo": {"versionNumber": 3}
+                            },
+                        },
+                        {
+                            "sourceType": "DATA_SOURCE_TYPE_DATASET",
+                            "sourceUrl": (
+                                "/datasets/pilkwang/"
+                                "biohub-tracking-support-pack-50ep-v1"
+                            ),
+                            "isPinned": True,
+                            "databundleVersion": {
+                                "databundleVersionInfo": {"versionNumber": 10}
+                            },
+                        },
+                    ]
+                }
+            raise AssertionError(f"Unexpected endpoint: {endpoint}")
+
+        client = SimpleNamespace(
+            get_text=Mock(return_value="notebook page"),
+            post_json=Mock(side_effect=post_json),
+            post_bytes=Mock(return_value=notebook),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            kaggle_harvest.download_exact_public_kernel_source(
+                source_ref,
+                336_369_307,
+                folder,
+                web_client=client,
+            )
+            metadata = json.loads(
+                (folder / "kernel-metadata.json").read_text(encoding="utf-8")
+            )
+            source = (folder / "source.ipynb").read_bytes()
+
+        self.assertEqual(source, notebook)
+        self.assertEqual(
+            metadata["competition_sources"],
+            ["biohub-cell-tracking-during-development"],
+        )
+        self.assertEqual(
+            metadata["dataset_sources"],
+            ["pilkwang/biohub-tracking-support-pack-50ep-v1/10"],
+        )
+        self.assertTrue(metadata["enable_gpu"])
+        self.assertEqual(metadata["machine_shape"], "NvidiaTeslaT4")
+        self.assertTrue(metadata["docker_image"].endswith(digest))
+
+    def test_exact_score_run_never_falls_through_to_second_notebook(self) -> None:
+        top = "boristown/dark-agi-biohub-cell-tracking-solution"
+        second = "example/second-notebook"
+        source_ref = f"{top}/7"
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "list_kernels",
+                return_value=[{"ref": top}, {"ref": second}],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "resolved_source_kernel",
+                return_value=(source_ref, "competition-code-score", 336_369_307),
+            ) as resolve_mock,
+            patch.object(
+                kaggle_harvest,
+                "copy_and_run_public_kernel",
+                side_effect=RuntimeError("top notebook failed"),
+            ) as run_mock,
+        ):
+            kaggle_harvest.process_auto_copy_code_submission(
+                self.competition,
+                state=state,
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=True,
+                now=kaggle_harvest.utc_now(),
+                report=report,
+            )
+
+        resolve_mock.assert_called_once_with(self.competition, {"ref": top})
+        run_mock.assert_called_once_with(
+            self.competition,
+            source_ref,
+            work_dir=Path("work"),
+            source_session_id=336_369_307,
+        )
+        self.assertEqual(len(report["candidates"]), 1)
+        self.assertEqual(report["candidates"][0]["kernel"], top)
+        self.assertIn("top notebook failed", report["errors"][0]["error"])
 
     def test_best_score_session_is_mapped_to_exact_version(self) -> None:
         version, session_id = kaggle_harvest.resolve_best_score_version(
@@ -812,6 +1040,37 @@ class BestScoreVersionTests(unittest.TestCase):
                 state,
                 self.competition.slug,
                 "new-hash",
+            )
+        )
+
+    def test_legacy_attempts_do_not_block_exact_score_copy_mode(self) -> None:
+        source_ref = f"{SOURCE_KERNEL}/25"
+        state = {
+            "submissions": [],
+            "failed_submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": source_ref,
+                    "sha256": "old-relay-hash",
+                }
+            ],
+            "rejected_sources": [],
+        }
+
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                source_ref,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                "old-relay-hash",
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
             )
         )
 

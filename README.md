@@ -119,23 +119,23 @@ dataset_source_versions = {}
 
 Before pushing, the main values to review are:
 
-- `sort_by = "scoreDescending"` - scan public kernels from highest score downward
+- `sort_by = "scoreDescending"` - read the Competition Code page in descending Public Score order
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
-- `auto_copy_notebook = true` - clone the selected public notebook's full source into a private notebook, preserve its Kaggle inputs and accelerator settings, run it, validate the newly generated output, and submit the owned version
-- `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty for automatic best-score version resolution
+- `auto_copy_notebook = true` - Copy & Edit the first unpinned Public Score result into a private notebook, preserve its exact Kaggle inputs and execution settings, run it, validate its new output, and submit the owned version
+- `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty to use the version linked to the displayed Public Score
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
 - `notebook_wait_timeout_seconds = 21600` - maximum wait for the cloned notebook run
 - `submission_wait_timeout_seconds = 1800` - wait for Kaggle's asynchronous scorer before recording success
 - `submission_poll_seconds = 15` - scorer status polling interval
 - `require_public_score = true` - Biohub is successful only after a public score is present
-- `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
+- `top_n = 100` - how many unpinned Competition Code results to read; only the first result is executed
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `submission_file_name = "submission.csv"` - require the public notebook version to produce that exact native output; alternate artifacts are never renamed for submission
 - `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, edge references, and duplicate node coordinates
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
-- `max_submit_attempts_per_run = 10` - if a cloned notebook is rejected or fails, continue downward through the score-sorted list, up to ten new notebook versions per run
+- `max_submit_attempts_per_run = 1` - execute only the first unpinned Public Score notebook; never fall through to a lower-scoring notebook in the same run
 - `max_submissions_per_day = 5` - Biohub's daily submission limit and the local guardrail
 
 For Biohub, Kaggle will not let one account submit another user's notebook
@@ -144,24 +144,20 @@ public source, rewriting its metadata for a private notebook owned by the
 `KAGGLE_API_TOKEN` account, running the complete notebook, and submitting the
 returned owned kernel version number. It never submits an output-only relay.
 
-For every score-sorted candidate, the workflow reads the public notebook's
-best-score `scriptVersionId`, maps it back to an exact `/versions/N` URL, and
-uses `owner/slug/N` as the immutable candidate identity. Before cloning, the
-workflow verifies that downloaded source is that same version. Kaggle commonly
-allows source download for the current public version but denies historical
-source with `403`; such a candidate is skipped instead of running a different
-version or relaying old output. If the mapping cannot be verified, the candidate
-is also skipped. Because Kaggle's kernel-list response can omit
-`currentVersionNumber` (the SDK then reports `0`), the workflow obtains it from
-the per-kernel metadata endpoint and can discover a safe version bound from the
-public version pages if that endpoint also omits it.
+The workflow queries the same `ListKernels` service as Kaggle's Competition
+Code page. Kaggle returns pinned notebooks separately, so they cannot displace
+the first normal result. From that first row, the workflow reads the
+score-linked `scriptVersionId`, resolves it to the exact `/versions/N` entry,
+and uses `owner/slug/N` as the immutable source identity. It does not use the
+notebook's latest version unless that is also the version linked to the score.
 
-After a source version is submitted, rejected by Kaggle's scorer, or rejected
-by local validation, later runs skip that exact `owner/slug/N` and continue
-down the score-sorted list. A newly scored version of the same notebook is
-treated as a new candidate. Previously attempted SHA-256 hashes are also
-skipped, so forks that publish identical bad output do not consume another
-submission slot.
+For that exact score session, the workflow downloads the original notebook
+source and reconstructs its Copy & Edit settings from Kaggle's version and data
+source metadata. Pinned dataset versions, competition inputs, accelerator, and
+Docker image are preserved before the private notebook is pushed and run. If
+the top notebook cannot be copied or fails, the run reports that error and
+stops; it does not try a lower-scoring notebook. State entries created by the
+older output-relay implementation do not block this exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or invalid, the entire source version is recorded as
