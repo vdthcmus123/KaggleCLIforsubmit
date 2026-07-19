@@ -1,4 +1,15 @@
 {
   "schema_version": 1,
-  "submissions": []
+  "submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-01cfed66a1",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel boristown/dark-agi-biohub-cell-tracking-solution/7 file submission.csv",
+      "sha256": "953a1edae10d8b2a6246663606fdb05497f3397df497116b282dcff2c2ed6210",
+      "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
+      "submitted_at_utc": "2026-07-19T13:00:30.247060+00:00"
+    }
+  ]
 }
