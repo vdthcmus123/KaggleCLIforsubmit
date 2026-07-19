@@ -1,5 +1,4 @@
 {
-  "schema_version": 1,
   "failed_submissions": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -15,5 +14,6 @@
       "submitted_at_utc": "2026-07-19T13:00:30.247060+00:00"
     }
   ],
+  "schema_version": 1,
   "submissions": []
 }
