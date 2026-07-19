@@ -3,8 +3,8 @@
 A small GitHub Actions-friendly tool that scans public Kaggle kernels for one
 or more competitions, finds matching submission files, and optionally submits
 them with the Kaggle CLI/API. For notebook-only competitions, it can copy the
-selected public notebook into your Kaggle account, run that owned copy, and
-submit the resulting notebook version.
+selected public notebook output through a small private relay notebook in your
+Kaggle account, then submit the resulting owned notebook version.
 
 The default mode is dry-run. Real submissions require both:
 
@@ -21,7 +21,7 @@ license expectations, and daily submission limits.
 - `.github/workflows/kaggle-harvest.yml` - scheduled/manual GitHub Actions workflow
 - `state/harvester-state.json` - tracked state, created by the tool after real submissions
 - `submissions/` - downloaded kernel outputs, ignored by git
-- `work/` - temporary pulled notebook source copies, ignored by git
+- `work/` - temporary generated relay notebooks, ignored by git
 - `logs/` - local run logs, ignored by git and uploaded as workflow artifacts
 
 ## Local setup
@@ -122,30 +122,39 @@ Before pushing, the main values to review are:
 - `sort_by = "scoreDescending"` - scan public kernels from highest score downward
 - `kernel_type = "notebook"` - Biohub only accepts submissions from notebooks
 - `code_competition = true` - submit an owned Kaggle notebook version instead of uploading the CSV directly
-- `auto_copy_notebook = true` - pull the selected public notebook, push it as a private notebook under your Kaggle account, wait for it to finish, then submit that version
+- `auto_copy_notebook = true` - create a private relay notebook that mounts the selected exact public notebook version, resolves that version's output with `kagglehub`, copies its matching output, runs, and submits the owned relay version
 - `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty for automatic best-score version resolution
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
-- `notebook_wait_timeout_seconds = 21600` - wait up to 6 hours for the copied notebook run
+- `notebook_wait_timeout_seconds = 21600` - maximum wait for the owned relay notebook run
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
 - `max_submissions_per_run = 1` - submit at most one new file each run
-- `max_submit_attempts_per_run = 3` - if a copied notebook fails, continue downward through the score-sorted list, up to three attempts per run
+- `max_submit_attempts_per_run = 3` - if a relay notebook fails, continue downward through the score-sorted list, up to three distinct notebooks per run
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
 
 For Biohub, Kaggle will not let one account submit another user's notebook
 session directly. The workflow avoids that permission error by creating a fresh
-private notebook copy in the Kaggle account represented by `KAGGLE_API_TOKEN`,
-then submitting the returned kernel version number.
+private relay notebook in the Kaggle account represented by
+`KAGGLE_API_TOKEN`. The relay mounts the selected exact public notebook version
+as `kernel_sources`, copies its submission output into `/kaggle/working`, and
+submits the returned owned kernel version number. It does not need permission to
+download the other author's source code. File matching happens inside the relay
+against the exact mounted version; it does not rely on `kaggle kernels files`,
+which only describes the latest run.
 
 For every score-sorted candidate, the workflow reads the public notebook's
 best-score `scriptVersionId`, maps it back to an exact `/versions/N` URL, and
-uses `owner/slug/N` for output inspection and copying. If that mapping cannot be
-verified, the candidate is skipped; the workflow never silently falls back to
-the latest version. Because Kaggle's kernel-list response can omit
+uses `owner/slug/N` as the relay's pinned kernel input. If that mapping cannot
+be verified, the candidate is skipped; the workflow never silently falls back
+to the latest version. Because Kaggle's kernel-list response can omit
 `currentVersionNumber` (the SDK then reports `0`), the workflow obtains it from
 the per-kernel metadata endpoint and can discover a safe version bound from the
 public version pages if that endpoint also omits it.
+
+After a source version is submitted successfully, later runs skip that exact
+`owner/slug/N` and continue down the score-sorted list. A newly scored version
+of the same notebook is treated as a new candidate.
 
 ## Notes
 

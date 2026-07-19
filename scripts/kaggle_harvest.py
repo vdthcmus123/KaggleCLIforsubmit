@@ -719,6 +719,18 @@ def already_submitted(
     return False
 
 
+def source_kernel_already_submitted(
+    state: dict[str, Any],
+    competition: str,
+    source_ref: str,
+) -> bool:
+    return any(
+        sub.get("competition") == competition
+        and sub.get("source_kernel_ref") == source_ref
+        for sub in state.get("submissions", [])
+    )
+
+
 def submissions_today(state: dict[str, Any], competition: str, now: datetime) -> int:
     today = now.date().isoformat()
     count = 0
@@ -777,6 +789,8 @@ def find_downloaded_files(folder: Path, pattern: re.Pattern[str]) -> list[Path]:
 
 def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]:
     target = out_dir / comp.slug / kernel.replace("/", "__")
+    if target.exists():
+        shutil.rmtree(target)
     target.mkdir(parents=True, exist_ok=True)
     run_cmd(
         [
@@ -846,7 +860,7 @@ def submit_file(
 def error_text(exc: Exception) -> str:
     if isinstance(exc, subprocess.CalledProcessError):
         return cmd_error(exc)
-    return str(exc)
+    return exception_details(exc)
 
 
 def exception_details(exc: Exception) -> str:
@@ -993,11 +1007,158 @@ def invalid_push_sources(result: Any) -> list[str]:
     return invalid
 
 
+def relay_notebook_document(
+    source_ref: str,
+    output_files: list[str],
+    file_pattern: str,
+) -> dict[str, Any]:
+    source_owner, source_slug, source_version = source_ref.split("/", 2)
+    source_handle = f"{source_owner}/{source_slug}/versions/{source_version}"
+    expected_names = sorted({Path(name).name for name in output_files})
+
+    code = f'''from pathlib import Path
+import re
+import shutil
+
+source_handle = {source_handle!r}
+source_owner = {source_owner!r}
+source_slug = {source_slug!r}
+expected_names = {expected_names!r}
+file_pattern = {file_pattern!r}
+input_root = Path("/kaggle/input")
+
+source_roots = []
+try:
+    import kagglehub
+
+    resolved = Path(kagglehub.notebook_output_download(source_handle))
+    source_roots = [resolved if resolved.is_dir() else resolved.parent]
+    print(f"Resolved exact notebook output {{source_handle}} at {{resolved}}")
+except Exception as exc:
+    print(f"kagglehub resolution failed: {{exc!r}}")
+
+if not source_roots:
+    direct_candidates = [
+        input_root / source_slug,
+        input_root / source_owner / source_slug,
+        input_root / "notebooks" / source_owner / source_slug,
+        input_root / "kernels" / source_owner / source_slug,
+    ]
+    source_roots = [path for path in direct_candidates if path.is_dir()]
+
+if not source_roots:
+    available = sorted(path.name for path in input_root.iterdir() if path.is_dir())
+    raise FileNotFoundError(
+        f"Could not find exact notebook output {{source_handle!r}}. "
+        f"Available inputs: {{available}}"
+    )
+
+pattern = re.compile(file_pattern)
+candidates = sorted(
+    (
+        path
+        for root in source_roots
+        for path in root.rglob("*")
+        if path.is_file()
+        and (path.name in expected_names or pattern.search(path.name))
+    ),
+    key=lambda path: (
+        path.name.lower() != "submission.csv",
+        path.name.lower(),
+        len(path.parts),
+        str(path),
+    ),
+)
+copied = []
+for source in candidates:
+    destination = Path("/kaggle/working") / source.name
+    if destination.exists():
+        continue
+    shutil.copy2(source, destination)
+    copied.append(str(destination))
+    print(f"Relayed {{source}} -> {{destination}}")
+
+if not copied:
+    raise FileNotFoundError(
+        f"No output matched {{file_pattern!r}} or {{expected_names}}"
+    )
+print(f"Relay complete: {{copied}}")
+'''
+    return {
+        "cells": [
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {},
+                "outputs": [],
+                "source": code,
+            }
+        ],
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
+            },
+            "language_info": {"name": "python", "version": "3.11"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+
+
+def prepare_output_relay_kernel(
+    folder: Path,
+    *,
+    comp: Competition,
+    source_ref: str,
+    target_ref: str,
+    output_files: list[str],
+) -> None:
+    base_ref = unversioned_ref(source_ref)
+    if source_ref == base_ref:
+        raise ValueError(
+            f"Refusing to relay unversioned notebook {source_ref}; exact version required."
+        )
+
+    code_file = "relay.ipynb"
+    notebook = relay_notebook_document(
+        source_ref,
+        output_files,
+        comp.file_pattern,
+    )
+    (folder / code_file).write_text(
+        json.dumps(notebook, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    metadata = {
+        "id": target_ref,
+        "title": target_ref.split("/", 1)[1],
+        "code_file": code_file,
+        "language": "python",
+        "kernel_type": "notebook",
+        "is_private": True,
+        "enable_gpu": False,
+        "enable_tpu": False,
+        "enable_internet": False,
+        "dataset_sources": [],
+        "competition_sources": [comp.slug],
+        "kernel_sources": [source_ref],
+        "model_sources": [],
+        "source_kernel": source_ref,
+    }
+    (folder / "kernel-metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def copy_and_run_public_kernel(
     comp: Competition,
     source_ref: str,
     *,
     work_dir: Path,
+    output_files: list[str],
 ) -> tuple[str, str, str]:
     base_ref = unversioned_ref(source_ref)
     if source_ref == base_ref:
@@ -1012,17 +1173,19 @@ def copy_and_run_public_kernel(
         shutil.rmtree(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"+ kaggle kernels pull {source_ref} -p {local_dir} -m")
-    api.kernels_pull(source_ref, path=str(local_dir), metadata=True, quiet=True)
-    rewrite_kernel_metadata(
+    prepare_output_relay_kernel(
         local_dir,
         comp=comp,
-        public_ref=source_ref,
+        source_ref=source_ref,
         target_ref=target_ref,
+        output_files=output_files,
     )
 
     timeout = comp.kernel_session_timeout_seconds
-    print(f"+ kaggle kernels push -p {local_dir}")
+    print(
+        f"+ kaggle kernels push -p {local_dir} "
+        f"# relay outputs from {source_ref}"
+    )
     result = api.kernels_push(str(local_dir), timeout=timeout)
     error = maybe_str(getattr(result, "error", None))
     if error:
@@ -1292,55 +1455,74 @@ def process_auto_copy_code_submission(
             )
             continue
 
+        candidate_report = {
+            "kernel": ref,
+            "source_kernel_ref": source_ref,
+            "version_resolution": version_resolution,
+            "source_session_id": source_session_id,
+            "file_pattern": comp.file_pattern,
+            "matching_files": [],
+        }
+        report["candidates"].append(candidate_report)
+
+        if source_kernel_already_submitted(state, comp.slug, source_ref):
+            report["skipped"].append(f"already submitted source {source_ref}")
+            continue
+
+        if not submit:
+            report["skipped"].append(
+                f"dry-run would relay {source_ref} and submit files matching "
+                f"{comp.file_pattern}"
+            )
+            continue
+
+        remaining_attempts -= 1
         try:
-            files = list_kernel_files(source_ref)
-        except subprocess.CalledProcessError as exc:
-            err = cmd_error(exc)
-            report["errors"].append({"kernel": source_ref, "error": err})
-            if is_rate_limited_error(err):
-                report["skipped"].append("Kaggle API rate limit reached")
-                break
-            continue
-
-        names = [name for name in (output_file_name(item) for item in files) if name]
-        matches = [name for name in names if pattern.search(Path(name).name)]
-        report["candidates"].append(
-            {
-                "kernel": ref,
-                "source_kernel_ref": source_ref,
-                "version_resolution": version_resolution,
-                "source_session_id": source_session_id,
-                "matching_files": matches,
-            }
-        )
-        if not matches:
-            continue
-
-        for file_name in matches:
-            if not submit:
-                report["skipped"].append(
-                    f"dry-run would copy, run, and submit {source_ref}:{file_name}"
-                )
-                continue
-
-            remaining_attempts -= 1
-            try:
-                owned_ref, owned_version, source_ref = copy_and_run_public_kernel(
+            owned_ref, owned_version, launched_source_ref = (
+                copy_and_run_public_kernel(
                     comp,
                     source_ref,
                     work_dir=work_dir,
+                    output_files=[],
                 )
-                wait_for_kernel_complete(
-                    owned_ref,
-                    timeout_seconds=comp.notebook_wait_timeout_seconds,
-                    poll_seconds=comp.notebook_poll_seconds,
-                )
-                downloaded = download_output(comp, owned_ref, output_dir)
-                selected = select_downloaded_file(downloaded, file_name)
-                if selected is None:
-                    raise FileNotFoundError(
-                        f"Downloaded output did not contain {file_name}"
-                    )
+            )
+            wait_for_kernel_complete(
+                owned_ref,
+                timeout_seconds=comp.notebook_wait_timeout_seconds,
+                poll_seconds=comp.notebook_poll_seconds,
+            )
+            downloaded = download_output(comp, owned_ref, output_dir)
+        except Exception as exc:  # noqa: BLE001 - try the next scored notebook.
+            report["errors"].append(
+                {
+                    "kernel": source_ref,
+                    "stage": "relay notebook",
+                    "error": error_text(exc),
+                }
+            )
+            continue
+
+        relay_outputs = sorted(
+            (path for path in downloaded if pattern.search(path.name)),
+            key=lambda path: (
+                path.name.lower() != "submission.csv",
+                path.name.lower(),
+            ),
+        )
+        if not relay_outputs:
+            report["errors"].append(
+                {
+                    "kernel": launched_source_ref,
+                    "stage": "inspect relay output",
+                    "error": "Relay notebook produced no matching submission file.",
+                }
+            )
+            continue
+        candidate_report["matching_files"] = [path.name for path in relay_outputs]
+
+        for selected in relay_outputs:
+            file_name = selected.name
+            try:
                 validation_errors = validate_submission_file(
                     selected, comp.required_columns
                 )
@@ -1354,7 +1536,7 @@ def process_auto_copy_code_submission(
                 file_hash = sha256_file(selected)
                 message = make_message(
                     comp,
-                    source_ref,
+                    launched_source_ref,
                     Path(file_name).name,
                     file_hash,
                 )
@@ -1369,7 +1551,7 @@ def process_auto_copy_code_submission(
                     "competition": comp.slug,
                     "kernel_ref": owned_ref,
                     "kernel_version": owned_version,
-                    "source_kernel_ref": source_ref,
+                    "source_kernel_ref": launched_source_ref,
                     "file_name": file_name,
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),
@@ -1381,10 +1563,15 @@ def process_auto_copy_code_submission(
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
                 err = error_text(exc)
                 report["errors"].append(
-                    {"kernel": source_ref, "file": file_name, "error": err}
+                    {
+                        "kernel": launched_source_ref,
+                        "file": file_name,
+                        "stage": "submit relay output",
+                        "error": err,
+                    }
                 )
 
-            if remaining_run <= 0 or remaining_attempts <= 0:
+            if remaining_run <= 0:
                 break
 
         if remaining_run <= 0 or remaining_attempts <= 0:
@@ -1590,6 +1777,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def failed_submission_competitions(
+    reports: list[dict[str, Any]],
+    *,
+    submit: bool,
+) -> list[str]:
+    return [
+        str(report.get("competition", ""))
+        for report in reports
+        if submit
+        and report.get("enabled", True)
+        and report.get("auto_submit", True)
+        and not report.get("submitted")
+        and "submission limit reached" not in report.get("skipped", [])
+    ]
+
+
 def main() -> int:
     args = parse_args()
     if not args.config.exists():
@@ -1635,6 +1838,13 @@ def main() -> int:
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY") if args.ci_summary else None
     append_summary(summary_path, markdown_summary(run_report))
+    failed = failed_submission_competitions(reports, submit=args.submit)
+    if failed:
+        print(
+            "No submission was created for: " + ", ".join(failed),
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

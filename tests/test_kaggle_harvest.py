@@ -4,6 +4,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from scripts import kaggle_harvest
 
@@ -114,7 +115,188 @@ class BestScoreVersionTests(unittest.TestCase):
                     self.competition,
                     SOURCE_KERNEL,
                     work_dir=Path(temp_dir),
+                    output_files=["submission.csv"],
                 )
+
+    def test_relay_kernel_pins_exact_source_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            source_ref = f"{SOURCE_KERNEL}/25"
+            target_ref = "example/auto-biohub-relay"
+            kaggle_harvest.prepare_output_relay_kernel(
+                folder,
+                comp=self.competition,
+                source_ref=source_ref,
+                target_ref=target_ref,
+                output_files=["submission_clean.csv", "submission.csv"],
+            )
+
+            metadata = json.loads(
+                (folder / "kernel-metadata.json").read_text(encoding="utf-8")
+            )
+            notebook = json.loads(
+                (folder / "relay.ipynb").read_text(encoding="utf-8")
+            )
+            self.assertEqual(metadata["id"], target_ref)
+            self.assertEqual(metadata["kernel_sources"], [source_ref])
+            self.assertEqual(
+                metadata["competition_sources"],
+                [self.competition.slug],
+            )
+            self.assertFalse(metadata["enable_gpu"])
+            code = notebook["cells"][0]["source"]
+            compile(code, "relay.ipynb", "exec")
+            self.assertIn("biohub-cell-tracking-blend-preprocessings", code)
+            self.assertIn(
+                "pilkwang/biohub-cell-tracking-blend-preprocessings/versions/25",
+                code,
+            )
+            self.assertIn("submission.csv", code)
+            self.assertIn("submission_clean.csv", code)
+
+    def test_candidate_with_two_outputs_runs_only_once(self) -> None:
+        report = {
+            "competition": self.competition.slug,
+            "enabled": True,
+            "auto_submit": True,
+            "sort_by": "scoreDescending",
+            "dry_run": False,
+            "kernels_seen": 0,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+        state = {"schema_version": 1, "submissions": []}
+        source_ref = f"{SOURCE_KERNEL}/25"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            submission = folder / "submission.csv"
+            cleaned = folder / "submission_clean.csv"
+            submission.touch()
+            cleaned.touch()
+
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": SOURCE_KERNEL}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    return_value=(source_ref, "best-score", 330025000),
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    return_value=("example/relay", "1", source_ref),
+                ) as run_mock,
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[cleaned, submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ),
+                patch.object(kaggle_harvest, "sha256_file", return_value="abc"),
+                patch.object(kaggle_harvest, "submit_file") as submit_mock,
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        run_mock.assert_called_once()
+        self.assertEqual(
+            run_mock.call_args.kwargs["output_files"],
+            [],
+        )
+        submit_mock.assert_called_once()
+        self.assertEqual(report["submitted"][0]["file_name"], "submission.csv")
+        self.assertEqual(
+            report["candidates"][0]["matching_files"],
+            ["submission.csv", "submission_clean.csv"],
+        )
+
+    def test_download_output_removes_files_from_an_older_relay_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            target = (
+                output_dir
+                / self.competition.slug
+                / "example__auto-biohub-relay"
+            )
+            target.mkdir(parents=True)
+            (target / "submission.csv").write_text("stale", encoding="utf-8")
+
+            with patch.object(kaggle_harvest, "run_cmd"):
+                downloaded = kaggle_harvest.download_output(
+                    self.competition,
+                    "example/auto-biohub-relay",
+                    output_dir,
+                )
+
+            self.assertEqual(downloaded, [])
+            self.assertFalse((target / "submission.csv").exists())
+
+    def test_only_the_exact_submitted_source_version_is_skipped(self) -> None:
+        state = {
+            "submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": f"{SOURCE_KERNEL}/25",
+                }
+            ]
+        }
+        self.assertTrue(
+            kaggle_harvest.source_kernel_already_submitted(
+                state,
+                self.competition.slug,
+                f"{SOURCE_KERNEL}/25",
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_submitted(
+                state,
+                self.competition.slug,
+                f"{SOURCE_KERNEL}/26",
+            )
+        )
+
+    def test_real_run_without_submission_is_reported_as_failure(self) -> None:
+        report = {
+            "competition": self.competition.slug,
+            "enabled": True,
+            "auto_submit": True,
+            "submitted": [],
+            "skipped": [],
+        }
+        self.assertEqual(
+            kaggle_harvest.failed_submission_competitions(
+                [report],
+                submit=True,
+            ),
+            [self.competition.slug],
+        )
+        report["skipped"] = ["submission limit reached"]
+        self.assertEqual(
+            kaggle_harvest.failed_submission_competitions(
+                [report],
+                submit=True,
+            ),
+            [],
+        )
 
     def test_unmapped_best_score_never_falls_back_to_latest(self) -> None:
         def fetch_unmapped(url: str) -> str:
