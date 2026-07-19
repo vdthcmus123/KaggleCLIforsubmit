@@ -136,7 +136,7 @@ Before pushing, the main values to review are:
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
 - `max_submit_attempts_per_run = 10` - if a relay notebook is rejected or fails, continue downward through the score-sorted list, up to ten new notebook versions per run
-- `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
+- `max_submissions_per_day = 5` - Biohub's daily submission limit and the local guardrail
 
 For Biohub, Kaggle will not let one account submit another user's notebook
 session directly. The workflow avoids that permission error by creating a fresh

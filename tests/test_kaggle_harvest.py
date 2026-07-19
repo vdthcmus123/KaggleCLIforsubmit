@@ -47,6 +47,7 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(self.competition.submission_file_name, "submission.csv")
         self.assertTrue(self.competition.require_public_score)
+        self.assertEqual(self.competition.max_submissions_per_day, 5)
 
     def test_best_score_session_is_mapped_to_exact_version(self) -> None:
         version, session_id = kaggle_harvest.resolve_best_score_version(
