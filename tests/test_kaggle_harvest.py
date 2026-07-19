@@ -137,7 +137,23 @@ class BestScoreVersionTests(unittest.TestCase):
 
     def test_exact_score_copy_preserves_source_inputs_and_runtime(self) -> None:
         source_ref = "boristown/dark-agi-biohub-cell-tracking-solution/7"
-        notebook = b'{"cells": [], "metadata": {}, "nbformat": 4}'
+        notebook = json.dumps(
+            {
+                "cells": [
+                    {
+                        "cell_type": "code",
+                        "source": [
+                            "support = '/kaggle/input/datasets/pilkwang/"
+                            "biohub-tracking-support-pack-50ep-v1/repo/src'\n",
+                            "test = '/kaggle/input/competitions/"
+                            "biohub-cell-tracking-during-development/test'\n",
+                        ],
+                    }
+                ],
+                "metadata": {},
+                "nbformat": 4,
+            }
+        ).encode("utf-8")
         digest = "37c64f7dd9c54116ecd1bcc88817c546"
 
         def post_json(endpoint: str, _payload: dict[str, object]) -> dict:
@@ -207,7 +223,17 @@ class BestScoreVersionTests(unittest.TestCase):
             )
             source = (folder / "source.ipynb").read_bytes()
 
-        self.assertEqual(source, notebook)
+        source_text = source.decode("utf-8")
+        self.assertNotIn("/kaggle/input/datasets/pilkwang/", source_text)
+        self.assertNotIn("/kaggle/input/competitions/", source_text)
+        self.assertIn(
+            "/kaggle/input/biohub-tracking-support-pack-50ep-v1/repo/src",
+            source_text,
+        )
+        self.assertIn(
+            "/kaggle/input/biohub-cell-tracking-during-development/test",
+            source_text,
+        )
         self.assertEqual(
             metadata["competition_sources"],
             ["biohub-cell-tracking-during-development"],

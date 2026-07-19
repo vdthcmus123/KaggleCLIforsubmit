@@ -154,10 +154,14 @@ notebook's latest version unless that is also the version linked to the score.
 For that exact score session, the workflow downloads the original notebook
 source and reconstructs its Copy & Edit settings from Kaggle's version and data
 source metadata. Pinned dataset versions, competition inputs, accelerator, and
-Docker image are preserved before the private notebook is pushed and run. If
-the top notebook cannot be copied or fails, the run reports that error and
-stops; it does not try a lower-scoring notebook. State entries created by the
-older output-relay implementation do not block this exact-copy mode.
+Docker image are preserved before the private notebook is pushed and run.
+Because Kaggle's CLI mounts copied inputs at `/kaggle/input/<slug>` while the
+web editor can expose `/kaggle/input/datasets/<owner>/<slug>` and
+`/kaggle/input/competitions/<slug>`, those literal source paths are adjusted to
+the CLI mount locations without changing notebook logic. If the top notebook
+cannot be copied or fails, the run reports that error and stops; it does not
+try a lower-scoring notebook. State entries created by the older output-relay
+implementation do not block this exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or has the wrong header, the source version is rejected;
