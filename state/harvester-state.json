@@ -72,6 +72,78 @@
       "rejected_at_utc": "2026-07-19T15:01:01.803962+00:00",
       "sha256": "d04630c3665711d01cfa1229ec0d009c58564421a12d1460c0c00bd2bbeabd5a",
       "source_kernel_ref": "navazshfathi/best-score/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 1; first occurrence: CSV line 103849: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T15:59:13.775700+00:00",
+      "sha256": "5aeae7debfc67b1b9fd1f2dfdfe1908a9c6b4f9174150ac7fb7204a7b6c8a36c",
+      "source_kernel_ref": "chiranjithdharma/replace-midpoint-insertion-with-weighted-interpola/21"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103418: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T16:15:23.536477+00:00",
+      "sha256": "7f041747b707498377a525ed498c84212161615361b28d473620cf70acf1a3ba",
+      "source_kernel_ref": "beicicc/biohub-exp073-gap-5-8-public/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103999: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T16:31:38.719743+00:00",
+      "sha256": "e8fce611b24837d5c21749ddf0d6e5ff61bd9d8650bdb3366534e9a8ff506f11",
+      "source_kernel_ref": "romanrozen/biohub-best-score/2"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103677: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T16:47:49.105391+00:00",
+      "sha256": "d86029cb4dbbe882acd27934dac38db590aa8e80e2a3f60ec4bff1ea8d8585a2",
+      "source_kernel_ref": "biohack44/biohub-another-approach-v2/3"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103768: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T17:03:59.041773+00:00",
+      "sha256": "180849eb89b204bf8480f5c3759b6233c4aa993300ded3abe6976e472131603e",
+      "source_kernel_ref": "beicicc/biohub-exp084-det-0-96875-gap-5-8-public/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103418: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T17:20:08.614287+00:00",
+      "sha256": "7f041747b707498377a525ed498c84212161615361b28d473620cf70acf1a3ba",
+      "source_kernel_ref": "llccqq624/biohub-exp001-public-0-903-reproduction/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103421: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T17:35:18.003960+00:00",
+      "sha256": "b52c7f221eb7565fb032980a6356291c3905883a4e7a18672124666c0e2589ff",
+      "source_kernel_ref": "llccqq624/biohub-exp002-density-motion-gated-0-903/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "negative node coordinate t: 64; first occurrence: CSV line 25533: -1000; negative node coordinate z: 64; first occurrence: CSV line 25533: -10000; negative node coordinate y: 64; first occurrence: CSV line 25533: -10000; negative node coordinate x: 64; first occurrence: CSV line 25533: -10000",
+      "rejected_at_utc": "2026-07-19T17:42:26.804553+00:00",
+      "sha256": "f9c99e754624cf14ae1288aa168420d6649c43214720e685361a2b52d393b6f9",
+      "source_kernel_ref": "navazshfathi/biohub-best-score-0-950/2"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "duplicate node coordinate: 2; first occurrence: CSV line 103768: 6bba_05b6850b/(26, 39, 128, 132)",
+      "rejected_at_utc": "2026-07-19T17:58:36.539463+00:00",
+      "sha256": "180849eb89b204bf8480f5c3759b6233c4aa993300ded3abe6976e472131603e",
+      "source_kernel_ref": "taopy2/bch-006-exp084-public0903/1"
     }
   ],
   "schema_version": 1,
