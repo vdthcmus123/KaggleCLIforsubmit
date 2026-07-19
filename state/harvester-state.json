@@ -52,7 +52,9 @@
       "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
       "submission_ref": 54837651,
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
-    },
+    }
+  ],
+  "pending_submissions": [
     {
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
@@ -60,7 +62,7 @@
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-01cfed66a1",
       "kernel_version": "7",
       "message": "AUTO Biohub public kernel boristown/dark-agi-biohub-cell-tracking-solution/7 file submission.csv",
-      "scoring_error": "timed out after 1800s waiting for final scoring",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
       "scoring_status": "pending",
       "sha256": "953a1edae10d8b2a6246663606fdb05497f3397df497116b282dcff2c2ed6210",
       "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
