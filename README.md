@@ -132,7 +132,7 @@ Before pushing, the main values to review are:
 - `top_n = 100` - how many unpinned Competition Code results to read; only the first result is executed
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
 - `submission_file_name = "submission.csv"` - require the public notebook version to produce that exact native output; alternate artifacts are never renamed for submission
-- `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, edge references, and duplicate node coordinates
+- `required_columns = [...]` - require the exact Biohub CSV header; strict row validation remains available for sources that are not linked to a displayed Public Score
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
 - `max_submit_attempts_per_run = 1` - execute only the first unpinned Public Score notebook; never fall through to a lower-scoring notebook in the same run
@@ -160,11 +160,14 @@ stops; it does not try a lower-scoring notebook. State entries created by the
 older output-relay implementation do not block this exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
-If that file is absent or invalid, the entire source version is recorded as
-rejected; an apparently cleaner side artifact such as `submission_clean.csv`
-is not renamed and submitted. API acceptance alone is not treated as success:
-the workflow waits for final scoring, checks `error_description`, and records
-failed scoring attempts separately so they still count toward the daily limit.
+If that file is absent or has the wrong header, the source version is rejected;
+an apparently cleaner side artifact such as `submission_clean.csv` is not
+renamed and submitted. Exact score-linked copies keep the original row values,
+including deliberate values that a stricter local validator might reject,
+because changing or replacing that output would no longer reproduce the linked
+submission. API acceptance alone is not treated as success: the workflow waits
+for final scoring, checks `error_description`, and records failed scoring
+attempts separately so they still count toward the daily limit.
 
 ## Notes
 

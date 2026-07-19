@@ -1333,6 +1333,8 @@ def validate_submission_file(
     path: Path,
     required_columns: tuple[str, ...] | None,
     dataset_shapes: dict[str, tuple[int, int, int, int]] | None = None,
+    *,
+    validate_rows: bool = True,
 ) -> list[str]:
     if not required_columns:
         return []
@@ -1356,7 +1358,7 @@ def validate_submission_file(
             "CSV header mismatch: expected "
             f"{','.join(required_columns)}; got {','.join(actual)}"
         ]
-    if actual == CELL_TRACKING_COLUMNS:
+    if validate_rows and actual == CELL_TRACKING_COLUMNS:
         return validate_cell_tracking_rows(path, dataset_shapes or {})
     return []
 
@@ -2441,10 +2443,14 @@ def process_auto_copy_code_submission(
             message = ""
             try:
                 file_hash = sha256_file(submission_path)
+                validation_kwargs: dict[str, Any] = {}
+                if execution_mode == EXACT_SCORE_COPY_MODE:
+                    validation_kwargs["validate_rows"] = False
                 validation_errors = validate_submission_file(
                     submission_path,
                     comp.required_columns,
                     comp.dataset_shapes,
+                    **validation_kwargs,
                 )
                 if validation_errors:
                     report["skipped"].append(

@@ -276,6 +276,86 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(report["candidates"][0]["kernel"], top)
         self.assertIn("top notebook failed", report["errors"][0]["error"])
 
+    def test_exact_score_process_keeps_original_submission_rows(self) -> None:
+        top = "boristown/dark-agi-biohub-cell-tracking-solution"
+        source_ref = f"{top}/7"
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            submission = Path(temp_dir) / "submission.csv"
+            submission.write_text(
+                ",".join(kaggle_harvest.CELL_TRACKING_COLUMNS) + "\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": top}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    return_value=(source_ref, "competition-code-score", 336_369_307),
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    return_value=("example/clone", "1", source_ref),
+                ),
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ) as validate_mock,
+                patch.object(
+                    kaggle_harvest,
+                    "sha256_file",
+                    return_value="exact-score-hash",
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "submit_file",
+                    return_value=123,
+                ) as submit_mock,
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=Path(temp_dir),
+                    work_dir=Path(temp_dir),
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        validate_mock.assert_called_once_with(
+            submission,
+            self.competition.required_columns,
+            self.competition.dataset_shapes,
+            validate_rows=False,
+        )
+        submit_mock.assert_called_once()
+        self.assertEqual(len(report["submitted"]), 1)
+
     def test_best_score_session_is_mapped_to_exact_version(self) -> None:
         version, session_id = kaggle_harvest.resolve_best_score_version(
             SOURCE_KERNEL,
@@ -756,6 +836,36 @@ class BestScoreVersionTests(unittest.TestCase):
 
         self.assertTrue(any("negative node coordinate t" in error for error in errors))
         self.assertTrue(any("negative node coordinate z" in error for error in errors))
+
+    def test_exact_score_copy_trusts_linked_submission_row_values(self) -> None:
+        shape = {"test_dataset": (2, 3, 4, 5)}
+        rows = [
+            [0, "test_dataset", "node", 1, -1000, -10000, -10000, -10000, -1, -1]
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            submission = Path(temp_dir) / "submission.csv"
+            with submission.open("w", encoding="utf-8", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(kaggle_harvest.CELL_TRACKING_COLUMNS)
+                writer.writerows(rows)
+
+            strict_errors = kaggle_harvest.validate_submission_file(
+                submission,
+                kaggle_harvest.CELL_TRACKING_COLUMNS,
+                shape,
+            )
+            exact_score_errors = kaggle_harvest.validate_submission_file(
+                submission,
+                kaggle_harvest.CELL_TRACKING_COLUMNS,
+                shape,
+                validate_rows=False,
+            )
+
+        self.assertTrue(
+            any("negative node coordinate t" in error for error in strict_errors)
+        )
+        self.assertEqual(exact_score_errors, [])
 
     def test_cell_tracking_validation_rejects_duplicate_node_coordinates(self) -> None:
         shape = {"test_dataset": (2, 3, 4, 5)}
