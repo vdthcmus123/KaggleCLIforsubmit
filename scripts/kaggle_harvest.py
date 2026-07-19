@@ -114,6 +114,16 @@ class SubmissionScoringError(RuntimeError):
         )
 
 
+class SubmissionPendingTimeout(RuntimeError):
+    def __init__(self, submission_ref: int, status: str, detail: str):
+        self.submission_ref = submission_ref
+        self.status = status
+        self.detail = detail
+        super().__init__(
+            f"Kaggle submission {submission_ref} is still {status}: {detail}"
+        )
+
+
 class ExactSourceUnavailableError(RuntimeError):
     """Raised when Kaggle will not expose the requested notebook source version."""
 
@@ -505,6 +515,7 @@ def load_state(path: Path) -> dict[str, Any]:
         return {
             "schema_version": STATE_VERSION,
             "submissions": [],
+            "pending_submissions": [],
             "failed_submissions": [],
             "rejected_sources": [],
         }
@@ -513,6 +524,7 @@ def load_state(path: Path) -> dict[str, Any]:
     if state.get("schema_version") != STATE_VERSION:
         raise ValueError(f"Unsupported state schema in {path}")
     state.setdefault("submissions", [])
+    state.setdefault("pending_submissions", [])
     state.setdefault("failed_submissions", [])
     state.setdefault("rejected_sources", [])
     return state
@@ -1076,6 +1088,7 @@ def source_kernel_already_attempted(
 ) -> bool:
     attempts = [
         *state.get("submissions", []),
+        *state.get("pending_submissions", []),
         *state.get("failed_submissions", []),
         *state.get("rejected_sources", []),
     ]
@@ -1105,6 +1118,7 @@ def submission_hash_already_attempted(
         return False
     attempts = [
         *state.get("submissions", []),
+        *state.get("pending_submissions", []),
         *state.get("failed_submissions", []),
         *state.get("rejected_sources", []),
     ]
@@ -1128,6 +1142,7 @@ def submissions_today(state: dict[str, Any], competition: str, now: datetime) ->
     count = 0
     attempts = [
         *state.get("submissions", []),
+        *state.get("pending_submissions", []),
         *state.get("failed_submissions", []),
     ]
     for sub in attempts:
@@ -1491,7 +1506,7 @@ def wait_for_submission_result(api: Any, comp: Competition, submission_ref: int)
             detail = f"timed out after {timeout}s waiting for final scoring"
             if last_lookup_error:
                 detail += f"; last API error: {last_lookup_error}"
-            raise SubmissionScoringError(
+            raise SubmissionPendingTimeout(
                 submission_ref,
                 (last_update or ("unknown", "", ""))[0],
                 detail,
@@ -1620,6 +1635,166 @@ def remember_failed_submission(
         record["execution_mode"] = execution_mode
     state.setdefault("failed_submissions", []).append(record)
     return record
+
+
+def remember_pending_submission(
+    state: dict[str, Any],
+    *,
+    comp: Competition,
+    kernel_ref: str,
+    file_name: str,
+    file_hash: str,
+    message: str,
+    pending: SubmissionPendingTimeout,
+    kernel_version: str | None = None,
+    source_kernel_ref: str | None = None,
+    execution_mode: str | None = None,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "competition": comp.slug,
+        "kernel_ref": kernel_ref,
+        "file_name": file_name,
+        "sha256": file_hash,
+        "submitted_at_utc": utc_now().isoformat(),
+        "message": message,
+        "submission_ref": pending.submission_ref,
+        "scoring_status": pending.status,
+        "pending_reason": pending.detail,
+    }
+    if kernel_version is not None:
+        record["kernel_version"] = kernel_version
+    if source_kernel_ref is not None:
+        record["source_kernel_ref"] = source_kernel_ref
+    if execution_mode is not None:
+        record["execution_mode"] = execution_mode
+    state.setdefault("pending_submissions", []).append(record)
+    return record
+
+
+def reconcile_pending_submissions(
+    state: dict[str, Any],
+    comp: Competition,
+    report: dict[str, Any],
+) -> dict[str, int]:
+    pending_records = state.setdefault("pending_submissions", [])
+    failed_records = state.setdefault("failed_submissions", [])
+    known_pending_refs = {
+        int(record.get("submission_ref") or 0) for record in pending_records
+    }
+
+    # Older runs classified a polling timeout as a scoring failure. Preserve
+    # the audit record, but move it back to pending before querying Kaggle.
+    retained_failed = []
+    for record in failed_records:
+        status = normalize_status(record.get("scoring_status"))
+        detail = str(record.get("scoring_error") or "")
+        submission_ref = int(record.get("submission_ref") or 0)
+        is_timed_out_pending = (
+            record.get("competition") == comp.slug
+            and status in {"pending", "unknown"}
+            and "timed out" in detail.lower()
+            and submission_ref > 0
+        )
+        if not is_timed_out_pending:
+            retained_failed.append(record)
+            continue
+        if submission_ref not in known_pending_refs:
+            migrated = dict(record)
+            migrated["pending_reason"] = migrated.pop("scoring_error", detail)
+            pending_records.append(migrated)
+            known_pending_refs.add(submission_ref)
+    state["failed_submissions"] = retained_failed
+
+    current = [
+        record
+        for record in pending_records
+        if record.get("competition") == comp.slug
+    ]
+    outcome = {"active": 0, "completed": 0, "failed": 0}
+    if not current:
+        return outcome
+
+    try:
+        api = kaggle_api()
+        submissions = api.competition_submissions(
+            comp.slug,
+            page_size=100,
+        ) or []
+    except Exception as exc:  # noqa: BLE001 - keep accepted submissions pending.
+        report["pending_submissions"].extend(current)
+        report["pending_lookup_error"] = exception_details(exc)
+        outcome["active"] = len(current)
+        return outcome
+
+    by_ref = {
+        int(object_value(item, ("ref",)) or 0): item
+        for item in submissions
+        if item is not None
+    }
+    active = []
+    current_ids = {id(record) for record in current}
+    untouched = [
+        record for record in pending_records if id(record) not in current_ids
+    ]
+
+    for record in current:
+        submission_ref = int(record.get("submission_ref") or 0)
+        submission = by_ref.get(submission_ref)
+        if submission is None:
+            active.append(record)
+            report["pending_submissions"].append(record)
+            outcome["active"] += 1
+            continue
+
+        status = normalize_status(object_value(submission, ("status",)))
+        scoring_error = maybe_str(
+            object_value(submission, ("error_description", "errorDescription"))
+        )
+        public_score = maybe_str(
+            object_value(submission, ("public_score", "publicScore"))
+        )
+        record["scoring_status"] = status or "unknown"
+
+        if scoring_error or status == "error":
+            failed = dict(record)
+            failed.pop("pending_reason", None)
+            failed["scoring_error"] = scoring_error or (
+                "Kaggle reported a submission error without details."
+            )
+            state["failed_submissions"].append(failed)
+            report["failed_submissions"].append(failed)
+            report["errors"].append(
+                {
+                    "submission_ref": submission_ref,
+                    "stage": "reconcile pending submission",
+                    "error": failed["scoring_error"],
+                }
+            )
+            outcome["failed"] += 1
+            continue
+
+        if status == "complete" and (
+            not comp.require_public_score or public_score is not None
+        ):
+            completed = dict(record)
+            completed.pop("pending_reason", None)
+            completed["scoring_status"] = "complete"
+            if public_score is not None:
+                completed["public_score"] = public_score
+            completed["scored_at_utc"] = utc_now().isoformat()
+            state["submissions"].append(completed)
+            report_record = dict(completed)
+            report_record["reconciled"] = True
+            report["submitted"].append(report_record)
+            outcome["completed"] += 1
+            continue
+
+        active.append(record)
+        report["pending_submissions"].append(record)
+        outcome["active"] += 1
+
+    state["pending_submissions"] = untouched + active
+    return outcome
 
 
 def remember_rejected_source(
@@ -2303,6 +2478,19 @@ def process_configured_code_submission(
             state["submissions"].append(record)
             report["submitted"].append(record)
             remaining_run -= 1
+        except SubmissionPendingTimeout as exc:
+            pending_record = remember_pending_submission(
+                state,
+                comp=comp,
+                kernel_ref=comp.submit_kernel,
+                kernel_version=comp.submit_kernel_version,
+                file_name=file_name,
+                file_hash=file_hash,
+                message=message,
+                pending=exc,
+            )
+            report.setdefault("pending_submissions", []).append(pending_record)
+            remaining_run -= 1
         except Exception as exc:  # noqa: BLE001 - keep the run moving.
             err = error_text(exc)
             report["errors"].append({"kernel": output_ref, "file": file_name, "error": err})
@@ -2589,6 +2777,23 @@ def process_auto_copy_code_submission(
                 state["submissions"].append(record)
                 report["submitted"].append(record)
                 remaining_run -= 1
+            except SubmissionPendingTimeout as exc:
+                pending_record = remember_pending_submission(
+                    state,
+                    comp=comp,
+                    kernel_ref=submission_kernel_ref,
+                    kernel_version=submission_kernel_version,
+                    source_kernel_ref=launched_source_ref,
+                    file_name=submission_path.name,
+                    file_hash=file_hash,
+                    message=message,
+                    pending=exc,
+                    execution_mode=execution_mode,
+                )
+                report.setdefault("pending_submissions", []).append(
+                    pending_record
+                )
+                remaining_run -= 1
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
                 err = error_text(exc)
                 report["errors"].append(
@@ -2644,6 +2849,7 @@ def process_competition(
         "kernels_seen": 0,
         "candidates": [],
         "submitted": [],
+        "pending_submissions": [],
         "failed_submissions": [],
         "rejected_sources": [],
         "skipped": [],
@@ -2656,6 +2862,14 @@ def process_competition(
     if submit and not comp.auto_submit:
         report["skipped"].append("submit requested but auto_submit=false")
         return report
+
+    if submit:
+        pending_outcome = reconcile_pending_submissions(state, comp, report)
+        if any(pending_outcome.values()):
+            report["pending_reconciliation"] = pending_outcome
+            if pending_outcome["active"]:
+                report["skipped"].append("submission still pending")
+            return report
 
     if comp.code_competition and comp.auto_copy_notebook:
         return process_auto_copy_code_submission(
@@ -2780,6 +2994,20 @@ def process_competition(
                 state["submissions"].append(record)
                 report["submitted"].append(record)
                 remaining_run -= 1
+            except SubmissionPendingTimeout as exc:
+                pending_record = remember_pending_submission(
+                    state,
+                    comp=comp,
+                    kernel_ref=ref,
+                    file_name=file_name,
+                    file_hash=file_hash,
+                    message=message,
+                    pending=exc,
+                )
+                report.setdefault("pending_submissions", []).append(
+                    pending_record
+                )
+                remaining_run -= 1
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
                 err = error_text(exc)
                 report["errors"].append({"kernel": ref, "file": file_name, "error": err})
@@ -2857,6 +3085,7 @@ def failed_submission_competitions(
         and report.get("enabled", True)
         and report.get("auto_submit", True)
         and not report.get("submitted")
+        and not report.get("pending_submissions")
         and "submission limit reached" not in report.get("skipped", [])
     ]
 
@@ -2924,19 +3153,20 @@ def markdown_summary(run_report: dict[str, Any]) -> list[str]:
         f"- Started: {run_report['started_at_utc']}",
         f"- Finished: {run_report['finished_at_utc']}",
         "",
-        "| Competition | Kernels | Candidates | Submitted | Errors |",
-        "| --- | ---: | ---: | ---: | ---: |",
+        "| Competition | Kernels | Candidates | Submitted | Pending | Errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for report in run_report["reports"]:
         candidates = sum(
             len(item.get("matching_files", [])) for item in report.get("candidates", [])
         )
         lines.append(
-            "| {competition} | {kernels} | {candidates} | {submitted} | {errors} |".format(
+            "| {competition} | {kernels} | {candidates} | {submitted} | {pending} | {errors} |".format(
                 competition=report.get("competition", ""),
                 kernels=report.get("kernels_seen", 0),
                 candidates=candidates,
                 submitted=len(report.get("submitted", [])),
+                pending=len(report.get("pending_submissions", [])),
                 errors=len(report.get("errors", [])),
             )
         )

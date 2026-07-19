@@ -126,7 +126,7 @@ Before pushing, the main values to review are:
 - `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty to use the version linked to the displayed Public Score
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
 - `notebook_wait_timeout_seconds = 21600` - maximum wait for the cloned notebook run
-- `submission_wait_timeout_seconds = 1800` - wait for Kaggle's asynchronous scorer before recording success
+- `submission_wait_timeout_seconds = 1800` - wait inline for Kaggle's asynchronous scorer; after this, keep the accepted submission as pending
 - `submission_poll_seconds = 15` - scorer status polling interval
 - `require_public_score = true` - Biohub is successful only after a public score is present
 - `top_n = 100` - how many unpinned Competition Code results to read; only the first result is executed
@@ -171,9 +171,13 @@ renamed and submitted. Exact score-linked copies keep the original row values,
 including deliberate values that a stricter local validator might reject, but
 still require data rows and every configured test dataset. This prevents an
 apparently successful notebook with an empty CSV from consuming a submission.
-API acceptance alone is not treated as success: the workflow waits for final
-scoring, checks `error_description`, and records failed scoring attempts
-separately so they still count toward the daily limit.
+API acceptance alone is not treated as scored success: the workflow waits for
+final scoring and checks `error_description`. If scoring is still pending after
+the inline timeout, the accepted submission is stored as pending and the run
+finishes successfully. The next scheduled run reconciles that same submission
+ID before doing any new work, so it does not consume a duplicate submission.
+Only an actual Kaggle scoring error is recorded as failed; both pending and
+failed attempts still count toward the daily limit.
 
 ## Notes
 

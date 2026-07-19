@@ -981,6 +981,31 @@ class BestScoreVersionTests(unittest.TestCase):
 
         self.assertEqual(api.competition_submissions.call_count, 2)
 
+    def test_submission_poll_timeout_remains_pending(self) -> None:
+        competition = replace(
+            self.competition,
+            submission_wait_timeout_seconds=1,
+        )
+        pending = SimpleNamespace(
+            ref=123,
+            status="SubmissionStatus.PENDING",
+            error_description="",
+            public_score="",
+        )
+        api = SimpleNamespace(
+            competition_submissions=Mock(return_value=[pending])
+        )
+
+        with (
+            patch.object(kaggle_harvest.time, "monotonic", side_effect=[0, 2]),
+            patch.object(kaggle_harvest.time, "sleep"),
+            self.assertRaises(kaggle_harvest.SubmissionPendingTimeout) as raised,
+        ):
+            kaggle_harvest.wait_for_submission_result(api, competition, 123)
+
+        self.assertEqual(raised.exception.submission_ref, 123)
+        self.assertEqual(raised.exception.status, "pending")
+
     def test_scoring_error_is_recorded_as_a_failed_submission(self) -> None:
         report = {
             "competition": self.competition.slug,
@@ -1062,6 +1087,233 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(report["submitted"], [])
         self.assertEqual(len(report["failed_submissions"]), 1)
+
+    def test_pending_score_is_recorded_without_a_run_error(self) -> None:
+        report = {
+            "competition": self.competition.slug,
+            "enabled": True,
+            "auto_submit": True,
+            "sort_by": "scoreDescending",
+            "dry_run": False,
+            "kernels_seen": 0,
+            "candidates": [],
+            "submitted": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "skipped": [],
+            "errors": [],
+        }
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+        }
+        source_ref = f"{SOURCE_KERNEL}/25"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            submission = folder / "submission.csv"
+            submission.touch()
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": SOURCE_KERNEL}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    return_value=(source_ref, "best-score", 330025000),
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    return_value=("example/clone", "1", source_ref),
+                ),
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ),
+                patch.object(kaggle_harvest, "sha256_file", return_value="abc"),
+                patch.object(
+                    kaggle_harvest,
+                    "submit_file",
+                    side_effect=kaggle_harvest.SubmissionPendingTimeout(
+                        123,
+                        "pending",
+                        "timed out after 1800s waiting for final scoring",
+                    ),
+                ),
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        self.assertEqual(state["submissions"], [])
+        self.assertEqual(state["failed_submissions"], [])
+        self.assertEqual(len(state["pending_submissions"]), 1)
+        self.assertEqual(state["pending_submissions"][0]["submission_ref"], 123)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(len(report["pending_submissions"]), 1)
+
+    def test_reconcile_migrates_old_pending_timeout(self) -> None:
+        old_record = {
+            "competition": self.competition.slug,
+            "kernel_ref": "example/clone",
+            "file_name": "submission.csv",
+            "sha256": "abc",
+            "submission_ref": 54838059,
+            "submitted_at_utc": kaggle_harvest.utc_now().isoformat(),
+            "scoring_status": "pending",
+            "scoring_error": "timed out after 1800s waiting for final scoring",
+        }
+        state = {
+            "submissions": [],
+            "pending_submissions": [],
+            "failed_submissions": [old_record],
+        }
+        report = {
+            "submitted": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "errors": [],
+        }
+        api = SimpleNamespace(
+            competition_submissions=Mock(
+                return_value=[
+                    SimpleNamespace(
+                        ref=54838059,
+                        status="SubmissionStatus.PENDING",
+                        error_description="",
+                        public_score="",
+                    )
+                ]
+            )
+        )
+
+        with patch.object(kaggle_harvest, "kaggle_api", return_value=api):
+            outcome = kaggle_harvest.reconcile_pending_submissions(
+                state,
+                self.competition,
+                report,
+            )
+
+        self.assertEqual(outcome, {"active": 1, "completed": 0, "failed": 0})
+        self.assertEqual(state["failed_submissions"], [])
+        self.assertEqual(len(state["pending_submissions"]), 1)
+        self.assertIn("pending_reason", state["pending_submissions"][0])
+        self.assertEqual(len(report["pending_submissions"]), 1)
+
+    def test_reconcile_promotes_scored_submission(self) -> None:
+        pending_record = {
+            "competition": self.competition.slug,
+            "kernel_ref": "example/clone",
+            "file_name": "submission.csv",
+            "sha256": "abc",
+            "submission_ref": 123,
+            "submitted_at_utc": kaggle_harvest.utc_now().isoformat(),
+            "scoring_status": "pending",
+            "pending_reason": "still scoring",
+        }
+        state = {
+            "submissions": [],
+            "pending_submissions": [pending_record],
+            "failed_submissions": [],
+        }
+        report = {
+            "submitted": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "errors": [],
+        }
+        api = SimpleNamespace(
+            competition_submissions=Mock(
+                return_value=[
+                    SimpleNamespace(
+                        ref=123,
+                        status="SubmissionStatus.COMPLETE",
+                        error_description="",
+                        public_score="0.952",
+                    )
+                ]
+            )
+        )
+
+        with patch.object(kaggle_harvest, "kaggle_api", return_value=api):
+            outcome = kaggle_harvest.reconcile_pending_submissions(
+                state,
+                self.competition,
+                report,
+            )
+
+        self.assertEqual(outcome, {"active": 0, "completed": 1, "failed": 0})
+        self.assertEqual(state["pending_submissions"], [])
+        self.assertEqual(state["submissions"][0]["public_score"], "0.952")
+        self.assertTrue(report["submitted"][0]["reconciled"])
+
+    def test_reconcile_promotes_scoring_error_to_failed(self) -> None:
+        pending_record = {
+            "competition": self.competition.slug,
+            "kernel_ref": "example/clone",
+            "file_name": "submission.csv",
+            "sha256": "abc",
+            "submission_ref": 123,
+            "submitted_at_utc": kaggle_harvest.utc_now().isoformat(),
+            "scoring_status": "pending",
+            "pending_reason": "still scoring",
+        }
+        state = {
+            "submissions": [],
+            "pending_submissions": [pending_record],
+            "failed_submissions": [],
+        }
+        report = {
+            "submitted": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "errors": [],
+        }
+        api = SimpleNamespace(
+            competition_submissions=Mock(
+                return_value=[
+                    SimpleNamespace(
+                        ref=123,
+                        status="SubmissionStatus.COMPLETE",
+                        error_description="incorrect format",
+                        public_score="",
+                    )
+                ]
+            )
+        )
+
+        with patch.object(kaggle_harvest, "kaggle_api", return_value=api):
+            outcome = kaggle_harvest.reconcile_pending_submissions(
+                state,
+                self.competition,
+                report,
+            )
+
+        self.assertEqual(outcome, {"active": 0, "completed": 0, "failed": 1})
+        self.assertEqual(state["pending_submissions"], [])
+        self.assertEqual(
+            state["failed_submissions"][0]["scoring_error"],
+            "incorrect format",
+        )
+        self.assertEqual(len(report["errors"]), 1)
 
     def test_download_output_removes_files_from_an_older_clone_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1317,6 +1569,15 @@ class BestScoreVersionTests(unittest.TestCase):
             ),
             [self.competition.slug],
         )
+        report["pending_submissions"] = [{"submission_ref": 123}]
+        self.assertEqual(
+            kaggle_harvest.failed_submission_competitions(
+                [report],
+                submit=True,
+            ),
+            [],
+        )
+        report["pending_submissions"] = []
         report["skipped"] = ["submission limit reached"]
         self.assertEqual(
             kaggle_harvest.failed_submission_competitions(
