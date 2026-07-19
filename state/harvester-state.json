@@ -38,6 +38,20 @@
       "source_kernel_ref": "yusuketogashi/biohub-clean-approach-no-metric-hacking/80",
       "submission_ref": 54833489,
       "submitted_at_utc": "2026-07-19T15:04:42.491968+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-01cfed66a1",
+      "kernel_version": "6",
+      "message": "AUTO Biohub public kernel boristown/dark-agi-biohub-cell-tracking-solution/7 file submission.csv",
+      "scoring_error": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected.",
+      "scoring_status": "complete",
+      "sha256": "bcda83f2bcc70536667f5beb59664ab0dbc6dd55527bd31c1f7fd6292ab684c2",
+      "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
+      "submission_ref": 54837651,
+      "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
   "rejected_sources": [
