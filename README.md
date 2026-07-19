@@ -126,9 +126,13 @@ Before pushing, the main values to review are:
 - `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty for automatic best-score version resolution
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
 - `notebook_wait_timeout_seconds = 21600` - maximum wait for the owned relay notebook run
+- `submission_wait_timeout_seconds = 1800` - wait for Kaggle's asynchronous scorer before recording success
+- `submission_poll_seconds = 15` - scorer status polling interval
+- `require_public_score = true` - Biohub is successful only after a public score is present
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
-- `required_columns = [...]` - skip downloaded CSVs whose header does not match Biohub's required submission format
+- `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, and edge references
+- `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
 - `max_submit_attempts_per_run = 3` - if a relay notebook fails, continue downward through the score-sorted list, up to three distinct notebooks per run
 - `max_submissions_per_day = 2` - local guardrail; also respect Kaggle's own limit
@@ -155,6 +159,13 @@ public version pages if that endpoint also omits it.
 After a source version is submitted successfully, later runs skip that exact
 `owner/slug/N` and continue down the score-sorted list. A newly scored version
 of the same notebook is treated as a new candidate.
+
+When several matching files exist, the workflow validates them in priority
+order. An invalid `submission.csv` is skipped and a valid alternative such as
+`submission_clean.csv` can be submitted from the same relay run. API acceptance
+alone is not treated as success: the workflow waits for final scoring, checks
+`error_description`, and records failed scoring attempts separately so they
+still count toward the daily limit.
 
 ## Notes
 

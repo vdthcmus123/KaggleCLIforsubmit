@@ -80,7 +80,7 @@ jobs:
           retention-days: 7
 
       - name: Commit updated state
-        if: success()
+        if: always()
         run: |
           set -euo pipefail
           if [ -n "$(git status --porcelain -- state/harvester-state.json)" ]; then

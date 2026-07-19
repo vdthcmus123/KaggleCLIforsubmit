@@ -19,6 +19,7 @@ import subprocess
 import sys
 import time
 import tomllib
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,9 +55,13 @@ class Defaults:
     copy_slug_prefix: str = "auto"
     notebook_wait_timeout_seconds: int = 21600
     notebook_poll_seconds: int = 60
+    submission_wait_timeout_seconds: int = 1800
+    submission_poll_seconds: int = 15
+    require_public_score: bool = False
     kernel_session_timeout_seconds: int | None = None
     source_kernel_versions: dict[str, int] = field(default_factory=dict)
     dataset_source_versions: dict[str, int] = field(default_factory=dict)
+    dataset_shapes: dict[str, tuple[int, int, int, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -81,11 +86,25 @@ class Competition:
     copy_slug_prefix: str = "auto"
     notebook_wait_timeout_seconds: int = 21600
     notebook_poll_seconds: int = 60
+    submission_wait_timeout_seconds: int = 1800
+    submission_poll_seconds: int = 15
+    require_public_score: bool = False
     kernel_session_timeout_seconds: int | None = None
     source_kernel_versions: dict[str, int] = field(default_factory=dict)
     dataset_source_versions: dict[str, int] = field(default_factory=dict)
+    dataset_shapes: dict[str, tuple[int, int, int, int]] = field(default_factory=dict)
     submit_kernel: str | None = None
     submit_kernel_version: str | None = None
+
+
+class SubmissionScoringError(RuntimeError):
+    def __init__(self, submission_ref: int, status: str, detail: str):
+        self.submission_ref = submission_ref
+        self.status = status
+        self.detail = detail
+        super().__init__(
+            f"Kaggle submission {submission_ref} failed ({status}): {detail}"
+        )
 
 
 def utc_now() -> datetime:
@@ -147,6 +166,21 @@ def load_config(path: Path) -> list[Competition]:
                 Defaults.notebook_poll_seconds,
             )
         ),
+        submission_wait_timeout_seconds=int(
+            defaults_raw.get(
+                "submission_wait_timeout_seconds",
+                Defaults.submission_wait_timeout_seconds,
+            )
+        ),
+        submission_poll_seconds=int(
+            defaults_raw.get(
+                "submission_poll_seconds",
+                Defaults.submission_poll_seconds,
+            )
+        ),
+        require_public_score=bool(
+            defaults_raw.get("require_public_score", Defaults.require_public_score)
+        ),
         kernel_session_timeout_seconds=maybe_int(
             defaults_raw.get(
                 "kernel_session_timeout_seconds",
@@ -160,6 +194,10 @@ def load_config(path: Path) -> list[Competition]:
         dataset_source_versions=maybe_version_map(
             defaults_raw.get("dataset_source_versions"),
             "defaults.dataset_source_versions",
+        ),
+        dataset_shapes=maybe_dataset_shapes(
+            defaults_raw.get("dataset_shapes"),
+            "defaults.dataset_shapes",
         ),
     )
 
@@ -222,6 +260,21 @@ def load_config(path: Path) -> list[Competition]:
                 notebook_poll_seconds=int(
                     item.get("notebook_poll_seconds", defaults.notebook_poll_seconds)
                 ),
+                submission_wait_timeout_seconds=int(
+                    item.get(
+                        "submission_wait_timeout_seconds",
+                        defaults.submission_wait_timeout_seconds,
+                    )
+                ),
+                submission_poll_seconds=int(
+                    item.get(
+                        "submission_poll_seconds",
+                        defaults.submission_poll_seconds,
+                    )
+                ),
+                require_public_score=bool(
+                    item.get("require_public_score", defaults.require_public_score)
+                ),
                 kernel_session_timeout_seconds=maybe_int(
                     item.get(
                         "kernel_session_timeout_seconds",
@@ -241,6 +294,10 @@ def load_config(path: Path) -> list[Competition]:
                         defaults.dataset_source_versions,
                     ),
                     f"{slug}.dataset_source_versions",
+                ),
+                dataset_shapes=maybe_dataset_shapes(
+                    item.get("dataset_shapes", defaults.dataset_shapes),
+                    f"{slug}.dataset_shapes",
                 ),
                 submit_kernel=maybe_str(item.get("submit_kernel")),
                 submit_kernel_version=maybe_str(item.get("submit_kernel_version")),
@@ -311,6 +368,43 @@ def maybe_version_map(value: Any, setting_name: str) -> dict[str, int]:
     return result
 
 
+def maybe_dataset_shapes(
+    value: Any,
+    setting_name: str,
+) -> dict[str, tuple[int, int, int, int]]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{setting_name} must be a TOML table.")
+
+    result: dict[str, tuple[int, int, int, int]] = {}
+    for raw_dataset, raw_shape in value.items():
+        dataset = str(raw_dataset).strip()
+        if not dataset:
+            raise ValueError(f"{setting_name} contains an empty dataset name.")
+        if not isinstance(raw_shape, (list, tuple)) or len(raw_shape) != 4:
+            raise ValueError(
+                f"{setting_name}[{raw_dataset!r}] must be [t, z, y, x]."
+            )
+        try:
+            shape = (
+                int(raw_shape[0]),
+                int(raw_shape[1]),
+                int(raw_shape[2]),
+                int(raw_shape[3]),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{setting_name}[{raw_dataset!r}] must contain four integers."
+            ) from exc
+        if any(size <= 0 for size in shape):
+            raise ValueError(
+                f"{setting_name}[{raw_dataset!r}] dimensions must be positive."
+            )
+        result[dataset] = shape
+    return result
+
+
 def with_pinned_version(ref: str, versions: dict[str, int]) -> str:
     base_ref = unversioned_ref(ref)
     version = versions.get(base_ref)
@@ -319,12 +413,17 @@ def with_pinned_version(ref: str, versions: dict[str, int]) -> str:
 
 def load_state(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"schema_version": STATE_VERSION, "submissions": []}
+        return {
+            "schema_version": STATE_VERSION,
+            "submissions": [],
+            "failed_submissions": [],
+        }
     with path.open("r", encoding="utf-8") as fh:
         state = json.load(fh)
     if state.get("schema_version") != STATE_VERSION:
         raise ValueError(f"Unsupported state schema in {path}")
     state.setdefault("submissions", [])
+    state.setdefault("failed_submissions", [])
     return state
 
 
@@ -734,7 +833,11 @@ def source_kernel_already_submitted(
 def submissions_today(state: dict[str, Any], competition: str, now: datetime) -> int:
     today = now.date().isoformat()
     count = 0
-    for sub in state.get("submissions", []):
+    attempts = [
+        *state.get("submissions", []),
+        *state.get("failed_submissions", []),
+    ]
+    for sub in attempts:
         if sub.get("competition") != competition:
             continue
         submitted_at = str(sub.get("submitted_at_utc", ""))
@@ -751,8 +854,184 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+CELL_TRACKING_COLUMNS = (
+    "id",
+    "dataset",
+    "row_type",
+    "node_id",
+    "t",
+    "z",
+    "y",
+    "x",
+    "source_id",
+    "target_id",
+)
+CELL_TRACKING_INTEGER_COLUMNS = (
+    "id",
+    "node_id",
+    "t",
+    "z",
+    "y",
+    "x",
+    "source_id",
+    "target_id",
+)
+
+
+def validate_cell_tracking_rows(
+    path: Path,
+    dataset_shapes: dict[str, tuple[int, int, int, int]],
+) -> list[str]:
+    issue_counts: dict[str, int] = {}
+    issue_examples: dict[str, str] = {}
+    actual_datasets: set[str] = set()
+    node_ids: dict[str, set[int]] = defaultdict(set)
+    edges: list[tuple[int, str, int, int]] = []
+    row_count = 0
+
+    def issue(code: str, detail: str) -> None:
+        issue_counts[code] = issue_counts.get(code, 0) + 1
+        issue_examples.setdefault(code, detail)
+
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as fh:
+            reader = csv.DictReader(fh)
+            for index, row in enumerate(reader):
+                row_count += 1
+                csv_line = index + 2
+                if None in row:
+                    issue("extra fields", f"CSV line {csv_line}")
+
+                dataset = (row.get("dataset") or "").strip()
+                if not dataset:
+                    issue("empty dataset", f"CSV line {csv_line}")
+                else:
+                    actual_datasets.add(dataset)
+
+                values: dict[str, int] = {}
+                integers_valid = True
+                for column in CELL_TRACKING_INTEGER_COLUMNS:
+                    raw = (row.get(column) or "").strip()
+                    try:
+                        value = int(raw)
+                    except (TypeError, ValueError):
+                        issue(
+                            f"invalid integer {column}",
+                            f"CSV line {csv_line}: {raw!r}",
+                        )
+                        integers_valid = False
+                        continue
+                    if raw != str(value):
+                        issue(
+                            f"non-canonical integer {column}",
+                            f"CSV line {csv_line}: {raw!r}",
+                        )
+                    values[column] = value
+
+                if not integers_valid:
+                    continue
+                if values["id"] != index:
+                    issue(
+                        "non-consecutive id",
+                        f"CSV line {csv_line}: expected {index}, got {values['id']}",
+                    )
+
+                row_type = (row.get("row_type") or "").strip()
+                if row_type == "node":
+                    if values["node_id"] < 0:
+                        issue(
+                            "negative node_id",
+                            f"CSV line {csv_line}: {values['node_id']}",
+                        )
+                    if values["node_id"] in node_ids[dataset]:
+                        issue(
+                            "duplicate node_id",
+                            f"CSV line {csv_line}: {dataset}/{values['node_id']}",
+                        )
+                    node_ids[dataset].add(values["node_id"])
+
+                    for column in ("t", "z", "y", "x"):
+                        if values[column] < 0:
+                            issue(
+                                f"negative node coordinate {column}",
+                                f"CSV line {csv_line}: {values[column]}",
+                            )
+                    shape = dataset_shapes.get(dataset)
+                    if shape is not None:
+                        for column, size in zip(("t", "z", "y", "x"), shape):
+                            if values[column] >= size:
+                                issue(
+                                    f"node coordinate {column} out of bounds",
+                                    f"CSV line {csv_line}: {values[column]} >= {size}",
+                                )
+                    if values["source_id"] != -1 or values["target_id"] != -1:
+                        issue(
+                            "node source/target must be -1",
+                            f"CSV line {csv_line}",
+                        )
+                elif row_type == "edge":
+                    if any(
+                        values[column] != -1
+                        for column in ("node_id", "t", "z", "y", "x")
+                    ):
+                        issue(
+                            "edge node fields must be -1",
+                            f"CSV line {csv_line}",
+                        )
+                    if values["source_id"] < 0 or values["target_id"] < 0:
+                        issue(
+                            "negative edge endpoint",
+                            f"CSV line {csv_line}: "
+                            f"{values['source_id']}->{values['target_id']}",
+                        )
+                    edges.append(
+                        (
+                            csv_line,
+                            dataset,
+                            values["source_id"],
+                            values["target_id"],
+                        )
+                    )
+                else:
+                    issue(
+                        "invalid row_type",
+                        f"CSV line {csv_line}: {row_type!r}",
+                    )
+    except (UnicodeDecodeError, csv.Error) as exc:
+        return [f"could not parse CSV rows: {exc}"]
+
+    if row_count == 0:
+        issue("no data rows", "CSV only contains a header")
+
+    for csv_line, dataset, source_id, target_id in edges:
+        if source_id not in node_ids[dataset]:
+            issue(
+                "edge source_id not found",
+                f"CSV line {csv_line}: {dataset}/{source_id}",
+            )
+        if target_id not in node_ids[dataset]:
+            issue(
+                "edge target_id not found",
+                f"CSV line {csv_line}: {dataset}/{target_id}",
+            )
+
+    if dataset_shapes:
+        expected_datasets = set(dataset_shapes)
+        for dataset in sorted(expected_datasets - actual_datasets):
+            issue("missing test dataset", dataset)
+        for dataset in sorted(actual_datasets - expected_datasets):
+            issue("unexpected test dataset", dataset)
+
+    return [
+        f"{code}: {count}; first occurrence: {issue_examples[code]}"
+        for code, count in issue_counts.items()
+    ]
+
+
 def validate_submission_file(
-    path: Path, required_columns: tuple[str, ...] | None
+    path: Path,
+    required_columns: tuple[str, ...] | None,
+    dataset_shapes: dict[str, tuple[int, int, int, int]] | None = None,
 ) -> list[str]:
     if not required_columns:
         return []
@@ -776,6 +1055,8 @@ def validate_submission_file(
             "CSV header mismatch: expected "
             f"{','.join(required_columns)}; got {','.join(actual)}"
         ]
+    if actual == CELL_TRACKING_COLUMNS:
+        return validate_cell_tracking_rows(path, dataset_shapes or {})
     return []
 
 
@@ -811,6 +1092,85 @@ def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]
     return find_downloaded_files(target, re.compile(comp.file_pattern))
 
 
+def wait_for_submission_result(api: Any, comp: Competition, submission_ref: int) -> None:
+    timeout = max(comp.submission_wait_timeout_seconds, 1)
+    poll = max(comp.submission_poll_seconds, 1)
+    deadline = time.monotonic() + timeout
+    last_update: tuple[str, str, str] | None = None
+    last_lookup_error = ""
+
+    while True:
+        try:
+            submissions = api.competition_submissions(
+                comp.slug,
+                page_size=100,
+            ) or []
+            submission = next(
+                (
+                    item
+                    for item in submissions
+                    if item is not None
+                    and int(object_value(item, ("ref",)) or 0) == submission_ref
+                ),
+                None,
+            )
+            last_lookup_error = ""
+        except Exception as exc:  # noqa: BLE001 - retry transient API failures.
+            submission = None
+            last_lookup_error = exception_details(exc)
+            print(
+                f"Could not query submission {submission_ref}; retrying: "
+                f"{last_lookup_error}"
+            )
+
+        if submission is not None:
+            status = normalize_status(object_value(submission, ("status",)))
+            scoring_error = maybe_str(
+                object_value(
+                    submission,
+                    ("error_description", "errorDescription"),
+                )
+            )
+            public_score = maybe_str(
+                object_value(submission, ("public_score", "publicScore"))
+            )
+            update = (status, scoring_error or "", public_score or "")
+            if update != last_update:
+                print(
+                    f"submission {submission_ref}: status={status or 'unknown'} "
+                    f"public_score={public_score or '-'}"
+                )
+                last_update = update
+
+            if scoring_error:
+                raise SubmissionScoringError(
+                    submission_ref,
+                    status or "scoring-error",
+                    scoring_error,
+                )
+            if status == "error":
+                raise SubmissionScoringError(
+                    submission_ref,
+                    status,
+                    "Kaggle reported a submission error without details.",
+                )
+            if status == "complete" and (
+                not comp.require_public_score or public_score is not None
+            ):
+                return
+
+        if time.monotonic() >= deadline:
+            detail = f"timed out after {timeout}s waiting for final scoring"
+            if last_lookup_error:
+                detail += f"; last API error: {last_lookup_error}"
+            raise SubmissionScoringError(
+                submission_ref,
+                (last_update or ("unknown", "", ""))[0],
+                detail,
+            )
+        time.sleep(poll)
+
+
 def submit_file(
     comp: Competition,
     kernel: str,
@@ -818,7 +1178,7 @@ def submit_file(
     message: str,
     *,
     kernel_version: str | None = None,
-) -> None:
+) -> int:
     try:
         from kaggle import api  # type: ignore[import-not-found]
 
@@ -855,6 +1215,11 @@ def submit_file(
     result_message = getattr(result, "message", None)
     if result_message:
         print(result_message)
+    submission_ref = int(getattr(result, "ref", 0) or 0)
+    if submission_ref <= 0:
+        raise RuntimeError("Kaggle accepted the request but returned no submission ID.")
+    wait_for_submission_result(api, comp, submission_ref)
+    return submission_ref
 
 
 def error_text(exc: Exception) -> str:
@@ -893,6 +1258,37 @@ def make_message(comp: Competition, kernel: str, file_name: str, sha256: str) ->
         short_sha=sha256[:12],
     )
     return message[:200]
+
+
+def remember_failed_submission(
+    state: dict[str, Any],
+    *,
+    comp: Competition,
+    kernel_ref: str,
+    file_name: str,
+    file_hash: str,
+    message: str,
+    error: SubmissionScoringError,
+    kernel_version: str | None = None,
+    source_kernel_ref: str | None = None,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "competition": comp.slug,
+        "kernel_ref": kernel_ref,
+        "file_name": file_name,
+        "sha256": file_hash,
+        "submitted_at_utc": utc_now().isoformat(),
+        "message": message,
+        "submission_ref": error.submission_ref,
+        "scoring_status": error.status,
+        "scoring_error": error.detail,
+    }
+    if kernel_version is not None:
+        record["kernel_version"] = kernel_version
+    if source_kernel_ref is not None:
+        record["source_kernel_ref"] = source_kernel_ref
+    state.setdefault("failed_submissions", []).append(record)
+    return record
 
 
 def slugify_text(text: str, *, max_len: int = 50) -> str:
@@ -1368,12 +1764,18 @@ def process_configured_code_submission(
             )
             continue
 
+        file_hash = ""
+        message = ""
         try:
             downloaded = download_output(comp, output_ref, output_dir)
             selected = select_downloaded_file(downloaded, file_name)
             if selected is None:
                 raise FileNotFoundError(f"Downloaded output did not contain {file_name}")
-            validation_errors = validate_submission_file(selected, comp.required_columns)
+            validation_errors = validate_submission_file(
+                selected,
+                comp.required_columns,
+                comp.dataset_shapes,
+            )
             if validation_errors:
                 report["skipped"].append(
                     "invalid submission format "
@@ -1383,7 +1785,12 @@ def process_configured_code_submission(
             file_hash = sha256_file(selected)
             message = make_message(comp, comp.submit_kernel, Path(file_name).name, file_hash)
             remaining_attempts -= 1
-            submit_file(comp, comp.submit_kernel, selected, message)
+            submission_ref = submit_file(
+                comp,
+                comp.submit_kernel,
+                selected,
+                message,
+            )
             record = {
                 "competition": comp.slug,
                 "kernel_ref": comp.submit_kernel,
@@ -1392,6 +1799,8 @@ def process_configured_code_submission(
                 "sha256": file_hash,
                 "submitted_at_utc": utc_now().isoformat(),
                 "message": message,
+                "submission_ref": submission_ref,
+                "scoring_status": "complete",
             }
             state["submissions"].append(record)
             report["submitted"].append(record)
@@ -1399,6 +1808,19 @@ def process_configured_code_submission(
         except Exception as exc:  # noqa: BLE001 - keep the run moving.
             err = error_text(exc)
             report["errors"].append({"kernel": output_ref, "file": file_name, "error": err})
+            if isinstance(exc, SubmissionScoringError):
+                failed_record = remember_failed_submission(
+                    state,
+                    comp=comp,
+                    kernel_ref=comp.submit_kernel,
+                    kernel_version=comp.submit_kernel_version,
+                    file_name=file_name,
+                    file_hash=file_hash,
+                    message=message,
+                    error=exc,
+                )
+                report.setdefault("failed_submissions", []).append(failed_record)
+                remaining_run -= 1
 
         if remaining_run <= 0 or remaining_attempts <= 0:
             break
@@ -1522,9 +1944,13 @@ def process_auto_copy_code_submission(
 
         for selected in relay_outputs:
             file_name = selected.name
+            file_hash = ""
+            message = ""
             try:
                 validation_errors = validate_submission_file(
-                    selected, comp.required_columns
+                    selected,
+                    comp.required_columns,
+                    comp.dataset_shapes,
                 )
                 if validation_errors:
                     report["skipped"].append(
@@ -1540,7 +1966,7 @@ def process_auto_copy_code_submission(
                     Path(file_name).name,
                     file_hash,
                 )
-                submit_file(
+                submission_ref = submit_file(
                     comp,
                     owned_ref,
                     selected,
@@ -1556,6 +1982,8 @@ def process_auto_copy_code_submission(
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),
                     "message": message,
+                    "submission_ref": submission_ref,
+                    "scoring_status": "complete",
                 }
                 state["submissions"].append(record)
                 report["submitted"].append(record)
@@ -1570,6 +1998,22 @@ def process_auto_copy_code_submission(
                         "error": err,
                     }
                 )
+                if isinstance(exc, SubmissionScoringError):
+                    failed_record = remember_failed_submission(
+                        state,
+                        comp=comp,
+                        kernel_ref=owned_ref,
+                        kernel_version=owned_version,
+                        source_kernel_ref=launched_source_ref,
+                        file_name=file_name,
+                        file_hash=file_hash,
+                        message=message,
+                        error=exc,
+                    )
+                    report.setdefault("failed_submissions", []).append(
+                        failed_record
+                    )
+                    remaining_run -= 1
 
             if remaining_run <= 0:
                 break
@@ -1598,6 +2042,7 @@ def process_competition(
         "kernels_seen": 0,
         "candidates": [],
         "submitted": [],
+        "failed_submissions": [],
         "skipped": [],
         "errors": [],
     }
@@ -1695,6 +2140,8 @@ def process_competition(
                     report["skipped"].append(f"dry-run would submit {ref}:{file_name}")
                 continue
 
+            file_hash = ""
+            message = ""
             try:
                 downloaded = download_output(comp, ref, output_dir)
                 selected = select_downloaded_file(downloaded, file_name)
@@ -1703,7 +2150,9 @@ def process_competition(
                         f"Downloaded output did not contain {file_name}"
                     )
                 validation_errors = validate_submission_file(
-                    selected, comp.required_columns
+                    selected,
+                    comp.required_columns,
+                    comp.dataset_shapes,
                 )
                 if validation_errors:
                     report["skipped"].append(
@@ -1714,7 +2163,7 @@ def process_competition(
                 file_hash = sha256_file(selected)
                 message = make_message(comp, ref, Path(file_name).name, file_hash)
                 remaining_attempts -= 1
-                submit_file(comp, ref, selected, message)
+                submission_ref = submit_file(comp, ref, selected, message)
                 record = {
                     "competition": comp.slug,
                     "kernel_ref": ref,
@@ -1722,6 +2171,8 @@ def process_competition(
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),
                     "message": message,
+                    "submission_ref": submission_ref,
+                    "scoring_status": "complete",
                 }
                 state["submissions"].append(record)
                 report["submitted"].append(record)
@@ -1729,6 +2180,20 @@ def process_competition(
             except Exception as exc:  # noqa: BLE001 - keep the run moving.
                 err = error_text(exc)
                 report["errors"].append({"kernel": ref, "file": file_name, "error": err})
+                if isinstance(exc, SubmissionScoringError):
+                    failed_record = remember_failed_submission(
+                        state,
+                        comp=comp,
+                        kernel_ref=ref,
+                        file_name=file_name,
+                        file_hash=file_hash,
+                        message=message,
+                        error=exc,
+                    )
+                    report.setdefault("failed_submissions", []).append(
+                        failed_record
+                    )
+                    remaining_run -= 1
                 if is_rate_limited_error(err):
                     rate_limited = True
 

@@ -1,15 +1,19 @@
 {
   "schema_version": 1,
-  "submissions": [
+  "failed_submissions": [
     {
       "competition": "biohub-cell-tracking-during-development",
       "file_name": "submission.csv",
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-01cfed66a1",
       "kernel_version": "1",
       "message": "AUTO Biohub public kernel boristown/dark-agi-biohub-cell-tracking-solution/7 file submission.csv",
+      "scoring_error": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected.",
+      "scoring_status": "complete",
       "sha256": "953a1edae10d8b2a6246663606fdb05497f3397df497116b282dcff2c2ed6210",
       "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
+      "submission_ref": 54831333,
       "submitted_at_utc": "2026-07-19T13:00:30.247060+00:00"
     }
-  ]
+  ],
+  "submissions": []
 }
