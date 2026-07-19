@@ -225,13 +225,13 @@ class BestScoreVersionTests(unittest.TestCase):
 
         source_text = source.decode("utf-8")
         self.assertNotIn("/kaggle/input/datasets/pilkwang/", source_text)
-        self.assertNotIn("/kaggle/input/competitions/", source_text)
         self.assertIn(
             "/kaggle/input/biohub-tracking-support-pack-50ep-v1/repo/src",
             source_text,
         )
         self.assertIn(
-            "/kaggle/input/biohub-cell-tracking-during-development/test",
+            "/kaggle/input/competitions/"
+            "biohub-cell-tracking-during-development/test",
             source_text,
         )
         self.assertEqual(
@@ -893,6 +893,25 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(exact_score_errors, [])
 
+    def test_exact_score_copy_rejects_header_only_submission(self) -> None:
+        shape = {"test_dataset": (2, 3, 4, 5)}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            submission = Path(temp_dir) / "submission.csv"
+            submission.write_text(
+                ",".join(kaggle_harvest.CELL_TRACKING_COLUMNS) + "\n",
+                encoding="utf-8",
+            )
+            errors = kaggle_harvest.validate_submission_file(
+                submission,
+                kaggle_harvest.CELL_TRACKING_COLUMNS,
+                shape,
+                validate_rows=False,
+            )
+
+        self.assertTrue(any("no data rows" in error for error in errors))
+        self.assertTrue(any("missing test dataset" in error for error in errors))
+
     def test_cell_tracking_validation_rejects_duplicate_node_coordinates(self) -> None:
         shape = {"test_dataset": (2, 3, 4, 5)}
         rows = [
@@ -1206,6 +1225,30 @@ class BestScoreVersionTests(unittest.TestCase):
                 state,
                 self.competition.slug,
                 "old-relay-hash",
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+            )
+        )
+
+    def test_broken_v1_exact_copy_does_not_block_fixed_copy_mode(self) -> None:
+        source_ref = f"{SOURCE_KERNEL}/25"
+        state = {
+            "submissions": [],
+            "failed_submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": source_ref,
+                    "sha256": "empty-submission-hash",
+                    "execution_mode": "competition-code-score-copy",
+                }
+            ],
+            "rejected_sources": [],
+        }
+
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                source_ref,
                 execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
             )
         )

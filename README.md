@@ -155,23 +155,25 @@ For that exact score session, the workflow downloads the original notebook
 source and reconstructs its Copy & Edit settings from Kaggle's version and data
 source metadata. Pinned dataset versions, competition inputs, accelerator, and
 Docker image are preserved before the private notebook is pushed and run.
-Because Kaggle's CLI mounts copied inputs at `/kaggle/input/<slug>` while the
-web editor can expose `/kaggle/input/datasets/<owner>/<slug>` and
-`/kaggle/input/competitions/<slug>`, those literal source paths are adjusted to
-the CLI mount locations without changing notebook logic. If the top notebook
-cannot be copied or fails, the run reports that error and stops; it does not
-try a lower-scoring notebook. State entries created by the older output-relay
-implementation do not block this exact-copy mode.
+Kaggle's CLI mounts dataset inputs at `/kaggle/input/<slug>` while the web
+editor can expose them at `/kaggle/input/datasets/<owner>/<slug>`, so dataset
+path literals are adjusted to the CLI mount location. Competition inputs keep
+their `/kaggle/input/competitions/<slug>` path; changing that path can make a
+notebook finish with an empty submission. If the top notebook cannot be copied
+or fails, the run reports that error and stops; it does not try a lower-scoring
+notebook. State entries created by the older output-relay implementation do not
+block this exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or has the wrong header, the source version is rejected;
 an apparently cleaner side artifact such as `submission_clean.csv` is not
 renamed and submitted. Exact score-linked copies keep the original row values,
-including deliberate values that a stricter local validator might reject,
-because changing or replacing that output would no longer reproduce the linked
-submission. API acceptance alone is not treated as success: the workflow waits
-for final scoring, checks `error_description`, and records failed scoring
-attempts separately so they still count toward the daily limit.
+including deliberate values that a stricter local validator might reject, but
+still require data rows and every configured test dataset. This prevents an
+apparently successful notebook with an empty CSV from consuming a submission.
+API acceptance alone is not treated as success: the workflow waits for final
+scoring, checks `error_description`, and records failed scoring attempts
+separately so they still count toward the daily limit.
 
 ## Notes
 

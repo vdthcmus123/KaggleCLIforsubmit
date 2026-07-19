@@ -36,7 +36,9 @@ SCRIPT_VERSION_ID_RE = re.compile(
     re.IGNORECASE,
 )
 COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
-EXACT_SCORE_COPY_MODE = "competition-code-score-copy"
+# Bump when copy execution semantics change so a source broken by an older
+# harvester implementation can be retried without deleting its audit record.
+EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v2"
 KAGGLE_WEB_BASE = "https://www.kaggle.com"
 
 
@@ -1172,6 +1174,8 @@ CELL_TRACKING_INTEGER_COLUMNS = (
 def validate_cell_tracking_rows(
     path: Path,
     dataset_shapes: dict[str, tuple[int, int, int, int]],
+    *,
+    validate_semantics: bool = True,
 ) -> list[str]:
     issue_counts: dict[str, int] = {}
     issue_examples: dict[str, str] = {}
@@ -1230,36 +1234,46 @@ def validate_cell_tracking_rows(
 
                 row_type = (row.get("row_type") or "").strip()
                 if row_type == "node":
-                    if values["node_id"] < 0:
+                    if validate_semantics and values["node_id"] < 0:
                         issue(
                             "negative node_id",
                             f"CSV line {csv_line}: {values['node_id']}",
                         )
-                    if values["node_id"] in node_ids[dataset]:
+                    if (
+                        validate_semantics
+                        and values["node_id"] in node_ids[dataset]
+                    ):
                         issue(
                             "duplicate node_id",
                             f"CSV line {csv_line}: {dataset}/{values['node_id']}",
                         )
                     node_ids[dataset].add(values["node_id"])
 
-                    for column in ("t", "z", "y", "x"):
-                        if values[column] < 0:
-                            issue(
-                                f"negative node coordinate {column}",
-                                f"CSV line {csv_line}: {values[column]}",
-                            )
-                    shape = dataset_shapes.get(dataset)
-                    if shape is not None:
-                        for column, size in zip(("t", "z", "y", "x"), shape):
-                            if values[column] >= size:
+                    if validate_semantics:
+                        for column in ("t", "z", "y", "x"):
+                            if values[column] < 0:
                                 issue(
-                                    f"node coordinate {column} out of bounds",
-                                    f"CSV line {csv_line}: {values[column]} >= {size}",
+                                    f"negative node coordinate {column}",
+                                    f"CSV line {csv_line}: {values[column]}",
                                 )
+                        shape = dataset_shapes.get(dataset)
+                        if shape is not None:
+                            for column, size in zip(
+                                ("t", "z", "y", "x"), shape
+                            ):
+                                if values[column] >= size:
+                                    issue(
+                                        f"node coordinate {column} out of bounds",
+                                        f"CSV line {csv_line}: "
+                                        f"{values[column]} >= {size}",
+                                    )
                     coordinate = tuple(
                         values[column] for column in ("t", "z", "y", "x")
                     )
-                    if coordinate in node_coordinates[dataset]:
+                    if (
+                        validate_semantics
+                        and coordinate in node_coordinates[dataset]
+                    ):
                         issue(
                             "duplicate node coordinate",
                             f"CSV line {csv_line}: {dataset}/{coordinate}",
@@ -1279,7 +1293,13 @@ def validate_cell_tracking_rows(
                             "edge node fields must be -1",
                             f"CSV line {csv_line}",
                         )
-                    if values["source_id"] < 0 or values["target_id"] < 0:
+                    if (
+                        validate_semantics
+                        and (
+                            values["source_id"] < 0
+                            or values["target_id"] < 0
+                        )
+                    ):
                         issue(
                             "negative edge endpoint",
                             f"CSV line {csv_line}: "
@@ -1304,17 +1324,18 @@ def validate_cell_tracking_rows(
     if row_count == 0:
         issue("no data rows", "CSV only contains a header")
 
-    for csv_line, dataset, source_id, target_id in edges:
-        if source_id not in node_ids[dataset]:
-            issue(
-                "edge source_id not found",
-                f"CSV line {csv_line}: {dataset}/{source_id}",
-            )
-        if target_id not in node_ids[dataset]:
-            issue(
-                "edge target_id not found",
-                f"CSV line {csv_line}: {dataset}/{target_id}",
-            )
+    if validate_semantics:
+        for csv_line, dataset, source_id, target_id in edges:
+            if source_id not in node_ids[dataset]:
+                issue(
+                    "edge source_id not found",
+                    f"CSV line {csv_line}: {dataset}/{source_id}",
+                )
+            if target_id not in node_ids[dataset]:
+                issue(
+                    "edge target_id not found",
+                    f"CSV line {csv_line}: {dataset}/{target_id}",
+                )
 
     if dataset_shapes:
         expected_datasets = set(dataset_shapes)
@@ -1358,8 +1379,12 @@ def validate_submission_file(
             "CSV header mismatch: expected "
             f"{','.join(required_columns)}; got {','.join(actual)}"
         ]
-    if validate_rows and actual == CELL_TRACKING_COLUMNS:
-        return validate_cell_tracking_rows(path, dataset_shapes or {})
+    if actual == CELL_TRACKING_COLUMNS:
+        return validate_cell_tracking_rows(
+            path,
+            dataset_shapes or {},
+            validate_semantics=validate_rows,
+        )
     return []
 
 
@@ -1828,17 +1853,6 @@ def cli_mount_path_replacements(
             (
                 f"/kaggle/input/datasets/{owner}/{slug}",
                 f"/kaggle/input/{slug}",
-            )
-        )
-
-    for slug in sources.get("competition_sources", []):
-        normalized = slug.strip().strip("/")
-        if not normalized:
-            continue
-        replacements.append(
-            (
-                f"/kaggle/input/competitions/{normalized}",
-                f"/kaggle/input/{normalized}",
             )
         )
     return replacements
