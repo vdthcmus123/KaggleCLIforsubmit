@@ -25,9 +25,55 @@
       "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
       "submission_ref": 54832621,
       "submitted_at_utc": "2026-07-19T14:15:44.296139+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-296736cc74",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel yusuketogashi/biohub-clean-approach-no-metric-hacking/80 file submission.csv",
+      "scoring_error": "Your notebook generated a submission file with incorrect format. Some examples causing this are: wrong number of rows or columns, empty values, an incorrect data type for a value, or invalid submission values from what is expected.",
+      "scoring_status": "complete",
+      "sha256": "b6293b7f2794ebcdff4a554f02bee19c594e0470da2a0b0ca826281aefa6ba4d",
+      "source_kernel_ref": "yusuketogashi/biohub-clean-approach-no-metric-hacking/80",
+      "submission_ref": 54833489,
+      "submitted_at_utc": "2026-07-19T15:04:42.491968+00:00"
     }
   ],
-  "rejected_sources": [],
+  "rejected_sources": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "negative node coordinate t: 64; first occurrence: CSV line 25535: -1000; negative node coordinate z: 64; first occurrence: CSV line 25535: -10000; negative node coordinate y: 64; first occurrence: CSV line 25535: -10000; negative node coordinate x: 64; first occurrence: CSV line 25535: -10000",
+      "rejected_at_utc": "2026-07-19T14:57:40.563488+00:00",
+      "sha256": "d04630c3665711d01cfa1229ec0d009c58564421a12d1460c0c00bd2bbeabd5a",
+      "source_kernel_ref": "nikitagajbhiye30/biohub-00/6"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "negative node coordinate t: 64; first occurrence: CSV line 25535: -1000; negative node coordinate z: 64; first occurrence: CSV line 25535: -10000; negative node coordinate y: 64; first occurrence: CSV line 25535: -10000; negative node coordinate x: 64; first occurrence: CSV line 25535: -10000",
+      "rejected_at_utc": "2026-07-19T14:58:48.053407+00:00",
+      "sha256": "d04630c3665711d01cfa1229ec0d009c58564421a12d1460c0c00bd2bbeabd5a",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/5"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "negative node coordinate t: 64; first occurrence: CSV line 25535: -1000; negative node coordinate z: 64; first occurrence: CSV line 25535: -10000; negative node coordinate y: 64; first occurrence: CSV line 25535: -10000; negative node coordinate x: 64; first occurrence: CSV line 25535: -10000",
+      "rejected_at_utc": "2026-07-19T14:59:55.064064+00:00",
+      "sha256": "d04630c3665711d01cfa1229ec0d009c58564421a12d1460c0c00bd2bbeabd5a",
+      "source_kernel_ref": "outwrest/metric-hack-minimal-baseline-tta-2gpu/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "file_name": "submission.csv",
+      "reason": "negative node coordinate t: 64; first occurrence: CSV line 25535: -1000; negative node coordinate z: 64; first occurrence: CSV line 25535: -10000; negative node coordinate y: 64; first occurrence: CSV line 25535: -10000; negative node coordinate x: 64; first occurrence: CSV line 25535: -10000",
+      "rejected_at_utc": "2026-07-19T15:01:01.803962+00:00",
+      "sha256": "d04630c3665711d01cfa1229ec0d009c58564421a12d1460c0c00bd2bbeabd5a",
+      "source_kernel_ref": "navazshfathi/best-score/1"
+    }
+  ],
   "schema_version": 1,
   "submissions": []
 }
