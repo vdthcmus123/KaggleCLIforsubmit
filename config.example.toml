@@ -7,6 +7,8 @@ language = "python"
 kernel_type = "all"
 output_type = "data"
 file_pattern = "(?i).*submission.*\\.csv$"
+# Set this when a competition requires an exact notebook output file name.
+# submission_file_name = "submission.csv"
 code_competition = false
 auto_copy_notebook = false
 copy_slug_prefix = "auto"

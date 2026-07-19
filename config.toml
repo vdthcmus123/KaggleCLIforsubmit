@@ -18,6 +18,7 @@ top_n = 100
 sort_by = "scoreDescending"
 kernel_type = "notebook"
 file_pattern = "(?i).*submission.*\\.csv$"
+submission_file_name = "submission.csv"
 code_competition = true
 auto_copy_notebook = true
 copy_slug_prefix = "auto"

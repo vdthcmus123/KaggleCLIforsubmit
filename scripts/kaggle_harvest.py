@@ -45,6 +45,7 @@ class Defaults:
     kernel_type: str = "all"
     output_type: str = "data"
     file_pattern: str = r"(?i).*submission.*\.csv$"
+    submission_file_name: str | None = None
     required_columns: tuple[str, ...] | None = None
     max_submissions_per_run: int = 1
     max_submit_attempts_per_run: int = 1
@@ -75,6 +76,7 @@ class Competition:
     kernel_type: str
     output_type: str
     file_pattern: str
+    submission_file_name: str | None
     required_columns: tuple[str, ...] | None
     max_submissions_per_run: int
     max_submit_attempts_per_run: int
@@ -123,6 +125,9 @@ def load_config(path: Path) -> list[Competition]:
         kernel_type=str(defaults_raw.get("kernel_type", Defaults.kernel_type)),
         output_type=str(defaults_raw.get("output_type", Defaults.output_type)),
         file_pattern=str(defaults_raw.get("file_pattern", Defaults.file_pattern)),
+        submission_file_name=maybe_str(
+            defaults_raw.get("submission_file_name", Defaults.submission_file_name)
+        ),
         required_columns=maybe_str_list(
             defaults_raw.get("required_columns", Defaults.required_columns)
         ),
@@ -217,6 +222,9 @@ def load_config(path: Path) -> list[Competition]:
                 kernel_type=str(item.get("kernel_type", defaults.kernel_type)),
                 output_type=str(item.get("output_type", defaults.output_type)),
                 file_pattern=str(item.get("file_pattern", defaults.file_pattern)),
+                submission_file_name=maybe_str(
+                    item.get("submission_file_name", defaults.submission_file_name)
+                ),
                 required_columns=maybe_str_list(
                     item.get("required_columns", defaults.required_columns)
                 ),
@@ -1407,6 +1415,7 @@ def relay_notebook_document(
     source_ref: str,
     output_files: list[str],
     file_pattern: str,
+    canonical_output_name: str | None = None,
 ) -> dict[str, Any]:
     source_owner, source_slug, source_version = source_ref.split("/", 2)
     source_handle = f"{source_owner}/{source_slug}/versions/{source_version}"
@@ -1421,6 +1430,7 @@ source_owner = {source_owner!r}
 source_slug = {source_slug!r}
 expected_names = {expected_names!r}
 file_pattern = {file_pattern!r}
+canonical_output_name = {canonical_output_name!r}
 input_root = Path("/kaggle/input")
 
 source_roots = []
@@ -1456,7 +1466,11 @@ candidates = sorted(
         for root in source_roots
         for path in root.rglob("*")
         if path.is_file()
-        and (path.name in expected_names or pattern.search(path.name))
+        and (
+            path.name in expected_names
+            if expected_names
+            else pattern.search(path.name)
+        )
     ),
     key=lambda path: (
         path.name.lower() != "submission.csv",
@@ -1466,8 +1480,12 @@ candidates = sorted(
     ),
 )
 copied = []
+if canonical_output_name:
+    candidates = candidates[:1]
 for source in candidates:
-    destination = Path("/kaggle/working") / source.name
+    destination = Path("/kaggle/working") / (
+        canonical_output_name or source.name
+    )
     if destination.exists():
         continue
     shutil.copy2(source, destination)
@@ -1510,18 +1528,22 @@ def prepare_output_relay_kernel(
     source_ref: str,
     target_ref: str,
     output_files: list[str],
+    canonical_output_name: str | None = None,
 ) -> None:
     base_ref = unversioned_ref(source_ref)
     if source_ref == base_ref:
         raise ValueError(
             f"Refusing to relay unversioned notebook {source_ref}; exact version required."
         )
+    if canonical_output_name and Path(canonical_output_name).name != canonical_output_name:
+        raise ValueError("canonical_output_name must be a file name, not a path.")
 
     code_file = "relay.ipynb"
     notebook = relay_notebook_document(
         source_ref,
         output_files,
         comp.file_pattern,
+        canonical_output_name,
     )
     (folder / code_file).write_text(
         json.dumps(notebook, indent=2) + "\n",
@@ -1555,6 +1577,7 @@ def copy_and_run_public_kernel(
     *,
     work_dir: Path,
     output_files: list[str],
+    canonical_output_name: str | None = None,
 ) -> tuple[str, str, str]:
     base_ref = unversioned_ref(source_ref)
     if source_ref == base_ref:
@@ -1575,6 +1598,7 @@ def copy_and_run_public_kernel(
         source_ref=source_ref,
         target_ref=target_ref,
         output_files=output_files,
+        canonical_output_name=canonical_output_name,
     )
 
     timeout = comp.kernel_session_timeout_seconds
@@ -1943,42 +1967,114 @@ def process_auto_copy_code_submission(
         candidate_report["matching_files"] = [path.name for path in relay_outputs]
 
         for selected in relay_outputs:
-            file_name = selected.name
+            source_file_name = selected.name
+            submission_path = selected
+            submission_kernel_ref = owned_ref
+            submission_kernel_version = owned_version
             file_hash = ""
             message = ""
             try:
                 validation_errors = validate_submission_file(
-                    selected,
+                    submission_path,
                     comp.required_columns,
                     comp.dataset_shapes,
                 )
                 if validation_errors:
                     report["skipped"].append(
                         "invalid submission format "
-                        f"{owned_ref}/{owned_version}:{file_name}: "
+                        f"{owned_ref}/{owned_version}:{source_file_name}: "
                         f"{'; '.join(validation_errors)}"
                     )
                     continue
-                file_hash = sha256_file(selected)
+                file_hash = sha256_file(submission_path)
+
+                canonical_name = comp.submission_file_name
+                if canonical_name and submission_path.name != canonical_name:
+                    print(
+                        f"Normalizing {source_file_name} to required notebook "
+                        f"output name {canonical_name}"
+                    )
+                    (
+                        submission_kernel_ref,
+                        submission_kernel_version,
+                        canonical_source_ref,
+                    ) = copy_and_run_public_kernel(
+                        comp,
+                        launched_source_ref,
+                        work_dir=work_dir,
+                        output_files=[source_file_name],
+                        canonical_output_name=canonical_name,
+                    )
+                    if canonical_source_ref != launched_source_ref:
+                        raise RuntimeError(
+                            "Canonical relay changed the exact source notebook version."
+                        )
+                    wait_for_kernel_complete(
+                        submission_kernel_ref,
+                        timeout_seconds=comp.notebook_wait_timeout_seconds,
+                        poll_seconds=comp.notebook_poll_seconds,
+                    )
+                    canonical_outputs = download_output(
+                        comp,
+                        submission_kernel_ref,
+                        output_dir / "canonicalized",
+                    )
+                    canonical_path = next(
+                        (
+                            path
+                            for path in canonical_outputs
+                            if path.name == canonical_name
+                        ),
+                        None,
+                    )
+                    if canonical_path is None:
+                        raise FileNotFoundError(
+                            "Canonical relay did not produce " + canonical_name
+                        )
+                    canonical_errors = validate_submission_file(
+                        canonical_path,
+                        comp.required_columns,
+                        comp.dataset_shapes,
+                    )
+                    if canonical_errors:
+                        raise ValueError(
+                            "Canonical relay produced an invalid submission: "
+                            + "; ".join(canonical_errors)
+                        )
+                    canonical_hash = sha256_file(canonical_path)
+                    if canonical_hash != file_hash:
+                        raise RuntimeError(
+                            "Canonical relay changed submission file contents."
+                        )
+                    submission_path = canonical_path
+                    candidate_report.setdefault("canonicalized_files", []).append(
+                        {
+                            "source_file": source_file_name,
+                            "submission_file": canonical_name,
+                            "kernel_version": submission_kernel_version,
+                        }
+                    )
+
                 message = make_message(
                     comp,
                     launched_source_ref,
-                    Path(file_name).name,
+                    source_file_name,
                     file_hash,
                 )
                 submission_ref = submit_file(
                     comp,
-                    owned_ref,
-                    selected,
+                    submission_kernel_ref,
+                    submission_path,
                     message,
-                    kernel_version=owned_version,
+                    kernel_version=submission_kernel_version,
                 )
                 record = {
                     "competition": comp.slug,
-                    "kernel_ref": owned_ref,
-                    "kernel_version": owned_version,
+                    "kernel_ref": submission_kernel_ref,
+                    "kernel_version": submission_kernel_version,
                     "source_kernel_ref": launched_source_ref,
-                    "file_name": file_name,
+                    "source_file_name": source_file_name,
+                    "file_name": submission_path.name,
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),
                     "message": message,
@@ -1993,7 +2089,7 @@ def process_auto_copy_code_submission(
                 report["errors"].append(
                     {
                         "kernel": launched_source_ref,
-                        "file": file_name,
+                        "file": source_file_name,
                         "stage": "submit relay output",
                         "error": err,
                     }
@@ -2002,10 +2098,10 @@ def process_auto_copy_code_submission(
                     failed_record = remember_failed_submission(
                         state,
                         comp=comp,
-                        kernel_ref=owned_ref,
-                        kernel_version=owned_version,
+                        kernel_ref=submission_kernel_ref,
+                        kernel_version=submission_kernel_version,
                         source_kernel_ref=launched_source_ref,
-                        file_name=file_name,
+                        file_name=submission_path.name,
                         file_hash=file_hash,
                         message=message,
                         error=exc,

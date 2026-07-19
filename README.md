@@ -131,6 +131,7 @@ Before pushing, the main values to review are:
 - `require_public_score = true` - Biohub is successful only after a public score is present
 - `top_n = 100` - how many public kernels to scan each run; Kaggle caps this page at 100
 - `file_pattern = "(?i).*submission.*\\.csv$"` - Biohub requires a submission CSV
+- `submission_file_name = "submission.csv"` - publish the validated file under the exact notebook-output name required by Biohub
 - `required_columns = [...]` - validate the full Biohub node/edge schema, integer values, IDs, and edge references
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
@@ -162,10 +163,13 @@ of the same notebook is treated as a new candidate.
 
 When several matching files exist, the workflow validates them in priority
 order. An invalid `submission.csv` is skipped and a valid alternative such as
-`submission_clean.csv` can be submitted from the same relay run. API acceptance
-alone is not treated as success: the workflow waits for final scoring, checks
-`error_description`, and records failed scoring attempts separately so they
-still count toward the daily limit.
+`submission_clean.csv` can be selected from the same source version. Because
+Biohub requires the notebook output to be named exactly `submission.csv`, a
+second lightweight relay publishes the selected file under that name and the
+workflow verifies that its SHA-256 hash did not change before submission. API
+acceptance alone is not treated as success: the workflow waits for final
+scoring, checks `error_description`, and records failed scoring attempts
+separately so they still count toward the daily limit.
 
 ## Notes
 

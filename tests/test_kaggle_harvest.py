@@ -1,5 +1,6 @@
 import csv
 import json
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -44,6 +45,7 @@ class BestScoreVersionTests(unittest.TestCase):
             self.competition.dataset_shapes["44b6_0113de3b"],
             (100, 64, 256, 256),
         )
+        self.assertEqual(self.competition.submission_file_name, "submission.csv")
         self.assertTrue(self.competition.require_public_score)
 
     def test_best_score_session_is_mapped_to_exact_version(self) -> None:
@@ -160,7 +162,45 @@ class BestScoreVersionTests(unittest.TestCase):
             self.assertIn("submission.csv", code)
             self.assertIn("submission_clean.csv", code)
 
-    def test_candidate_runs_once_and_skips_an_invalid_preferred_output(self) -> None:
+    def test_relay_can_publish_selected_output_under_required_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            source_folder = folder / "source"
+            working_folder = folder / "working"
+            source_folder.mkdir()
+            working_folder.mkdir()
+            (source_folder / "submission.csv").write_text(
+                "invalid",
+                encoding="utf-8",
+            )
+            (source_folder / "submission_clean.csv").write_text(
+                "valid",
+                encoding="utf-8",
+            )
+
+            notebook = kaggle_harvest.relay_notebook_document(
+                f"{SOURCE_KERNEL}/25",
+                ["submission_clean.csv"],
+                self.competition.file_pattern,
+                "submission.csv",
+            )
+            code = notebook["cells"][0]["source"]
+            code = code.replace(
+                'Path("/kaggle/working")',
+                f"Path({str(working_folder)!r})",
+            )
+            fake_kagglehub = SimpleNamespace(
+                notebook_output_download=lambda _handle: source_folder
+            )
+
+            with patch.dict(sys.modules, {"kagglehub": fake_kagglehub}):
+                exec(compile(code, "relay.ipynb", "exec"), {})
+
+            canonical = working_folder / "submission.csv"
+            self.assertEqual(canonical.read_text(encoding="utf-8"), "valid")
+            self.assertFalse((working_folder / "submission_clean.csv").exists())
+
+    def test_candidate_normalizes_a_valid_alternative_before_submit(self) -> None:
         report = {
             "competition": self.competition.slug,
             "enabled": True,
@@ -182,10 +222,16 @@ class BestScoreVersionTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
-            submission = folder / "submission.csv"
-            cleaned = folder / "submission_clean.csv"
+            raw_folder = folder / "raw"
+            canonical_folder = folder / "canonical"
+            raw_folder.mkdir()
+            canonical_folder.mkdir()
+            submission = raw_folder / "submission.csv"
+            cleaned = raw_folder / "submission_clean.csv"
+            canonical = canonical_folder / "submission.csv"
             submission.touch()
             cleaned.touch()
+            canonical.touch()
 
             with (
                 patch.object(
@@ -201,20 +247,29 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    return_value=("example/relay", "1", source_ref),
+                    side_effect=[
+                        ("example/relay", "1", source_ref),
+                        ("example/relay", "2", source_ref),
+                    ],
                 ) as run_mock,
-                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "wait_for_kernel_complete",
+                ) as wait_mock,
                 patch.object(
                     kaggle_harvest,
                     "download_output",
-                    return_value=[cleaned, submission],
+                    side_effect=[
+                        [cleaned, submission],
+                        [canonical],
+                    ],
                 ),
                 patch.object(
                     kaggle_harvest,
                     "validate_submission_file",
                     side_effect=lambda path, *_args: (
                         ["negative node coordinate t"]
-                        if path.name == "submission.csv"
+                        if path == submission
                         else []
                     ),
                 ),
@@ -235,14 +290,29 @@ class BestScoreVersionTests(unittest.TestCase):
                     report=report,
                 )
 
-        run_mock.assert_called_once()
+        self.assertEqual(run_mock.call_count, 2)
         self.assertEqual(
-            run_mock.call_args.kwargs["output_files"],
+            run_mock.call_args_list[0].kwargs["output_files"],
             [],
         )
+        self.assertEqual(
+            run_mock.call_args_list[1].kwargs["output_files"],
+            ["submission_clean.csv"],
+        )
+        self.assertEqual(
+            run_mock.call_args_list[1].kwargs["canonical_output_name"],
+            "submission.csv",
+        )
+        self.assertEqual(wait_mock.call_count, 2)
         submit_mock.assert_called_once()
+        self.assertEqual(submit_mock.call_args.args[2], canonical)
+        self.assertEqual(submit_mock.call_args.kwargs["kernel_version"], "2")
         self.assertEqual(
             report["submitted"][0]["file_name"],
+            "submission.csv",
+        )
+        self.assertEqual(
+            report["submitted"][0]["source_file_name"],
             "submission_clean.csv",
         )
         self.assertEqual(report["submitted"][0]["submission_ref"], 123)
