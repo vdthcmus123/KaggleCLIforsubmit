@@ -2015,43 +2015,6 @@ def metadata_sources_from_session(
     return result
 
 
-def cli_mount_path_replacements(
-    sources: dict[str, list[str]],
-) -> list[tuple[str, str]]:
-    replacements: list[tuple[str, str]] = []
-    for ref in sources.get("dataset_sources", []):
-        base_ref = unversioned_ref(ref)
-        parts = base_ref.split("/", 1)
-        if len(parts) != 2 or not all(parts):
-            continue
-        owner, slug = parts
-        replacements.append(
-            (
-                f"/kaggle/input/datasets/{owner}/{slug}",
-                f"/kaggle/input/{slug}",
-            )
-        )
-    return replacements
-
-
-def rewrite_cli_mount_paths(
-    source: bytes,
-    sources: dict[str, list[str]],
-) -> bytes:
-    rewritten = source
-    for original, mounted in cli_mount_path_replacements(sources):
-        original_bytes = original.encode("utf-8")
-        occurrences = rewritten.count(original_bytes)
-        if not occurrences:
-            continue
-        rewritten = rewritten.replace(original_bytes, mounted.encode("utf-8"))
-        print(
-            f"Adjusted Kaggle CLI mount path ({occurrences} occurrence(s)): "
-            f"{original} -> {mounted}"
-        )
-    return rewritten
-
-
 def machine_shape_for_accelerator(accelerator: str) -> str | None:
     shapes = {
         "NVIDIA_TESLA_K80": "NvidiaTeslaK80",
@@ -2135,7 +2098,6 @@ def download_exact_public_kernel_source(
             f"Kaggle returned invalid input metadata for {source_ref}."
         )
     sources = metadata_sources_from_session(raw_data_sources)
-    source = rewrite_cli_mount_paths(source, sources)
 
     accelerator = str(settings.get("accelerator") or "NONE").upper()
     run_info = run.get("runInfo") or {}

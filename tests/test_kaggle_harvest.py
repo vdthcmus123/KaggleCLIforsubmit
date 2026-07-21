@@ -135,7 +135,7 @@ class BestScoreVersionTests(unittest.TestCase):
             {"kernelId": 127_764_376, "sortOption": "VERSION_ID"},
         )
 
-    def test_exact_score_copy_preserves_source_inputs_and_runtime(self) -> None:
+    def test_exact_score_copy_preserves_source_bytes_inputs_and_runtime(self) -> None:
         source_ref = "boristown/dark-agi-biohub-cell-tracking-solution/7"
         notebook = json.dumps(
             {
@@ -223,10 +223,11 @@ class BestScoreVersionTests(unittest.TestCase):
             )
             source = (folder / "source.ipynb").read_bytes()
 
+        self.assertEqual(source, notebook)
         source_text = source.decode("utf-8")
-        self.assertNotIn("/kaggle/input/datasets/pilkwang/", source_text)
         self.assertIn(
-            "/kaggle/input/biohub-tracking-support-pack-50ep-v1/repo/src",
+            "/kaggle/input/datasets/pilkwang/"
+            "biohub-tracking-support-pack-50ep-v1/repo/src",
             source_text,
         )
         self.assertIn(

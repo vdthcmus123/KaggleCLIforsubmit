@@ -155,18 +155,19 @@ linked to the score.
 For that exact score session, the workflow downloads the original notebook
 source and reconstructs its Copy & Edit settings from Kaggle's version and data
 source metadata. Pinned dataset versions, competition inputs, accelerator, and
-Docker image are preserved before the private notebook is pushed and run.
-Kaggle's CLI mounts dataset inputs at `/kaggle/input/<slug>` while the web
-editor can expose them at `/kaggle/input/datasets/<owner>/<slug>`, so dataset
-path literals are adjusted to the CLI mount location. Competition inputs keep
-their `/kaggle/input/competitions/<slug>` path; changing that path can make a
-notebook finish with an empty submission. A source that depends on inaccessible
-private data, or whose exact version was already attempted, is skipped before
-execution and the scan continues downward. Once the first reproducible source
-is launched, the per-run execution limit applies and no lower-scoring notebook
-is launched in that workflow. If no new reproducible source exists, the run
-finishes successfully as skipped. State entries created by the older
-output-relay implementation do not block this exact-copy mode.
+Docker image are preserved before the private notebook is pushed and run. The
+downloaded source bytes are not edited: in particular, `/kaggle/input/...`
+paths remain exactly as the score-linked notebook wrote them. This is required
+because CLI-created copies can retain owner-qualified dataset mounts such as
+`/kaggle/input/datasets/<owner>/<slug>`; rewriting those paths can make an
+otherwise valid notebook fail to import its attached code. A source that
+depends on inaccessible private data, or whose exact version was already
+attempted, is skipped before execution and the scan continues downward. Once
+the first reproducible source is launched, the per-run execution limit applies
+and no lower-scoring notebook is launched in that workflow. If no new
+reproducible source exists, the run finishes successfully as skipped. State
+entries created by the older output-relay implementation do not block this
+exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or has the wrong header, the source version is rejected;
