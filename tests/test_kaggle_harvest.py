@@ -246,7 +246,7 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(metadata["machine_shape"], "NvidiaTeslaT4")
         self.assertTrue(metadata["docker_image"].endswith(digest))
 
-    def test_exact_score_run_never_falls_through_to_second_notebook(self) -> None:
+    def test_run_stops_after_first_launched_candidate_fails(self) -> None:
         top = "boristown/dark-agi-biohub-cell-tracking-solution"
         second = "example/second-notebook"
         source_ref = f"{top}/7"
@@ -301,6 +301,149 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(len(report["candidates"]), 1)
         self.assertEqual(report["candidates"][0]["kernel"], top)
         self.assertIn("top notebook failed", report["errors"][0]["error"])
+
+    def test_unavailable_top_falls_through_to_first_copyable_candidate(self) -> None:
+        top = "xiaoleilian/biohub-ct-mix-divaug"
+        second = "example/second-notebook"
+        top_source = f"{top}/1"
+        second_source = f"{second}/2"
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            submission = folder / "submission.csv"
+            submission.touch()
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": top}, {"ref": second}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    side_effect=[
+                        (top_source, "competition-code-score", 336_636_706),
+                        (second_source, "competition-code-score", 336_600_000),
+                    ],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    side_effect=[
+                        kaggle_harvest.ExactSourceUnavailableError(
+                            "private dataset"
+                        ),
+                        ("example/clone", "1", second_source),
+                    ],
+                ) as run_mock,
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ),
+                patch.object(kaggle_harvest, "sha256_file", return_value="abc"),
+                patch.object(kaggle_harvest, "submit_file", return_value=123),
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(
+            state["rejected_sources"][0]["source_kernel_ref"],
+            top_source,
+        )
+        self.assertEqual(report["submitted"][0]["source_kernel_ref"], second_source)
+        self.assertEqual(report["errors"], [])
+
+    def test_already_attempted_top_falls_through_to_next_candidate(self) -> None:
+        top = "xiaoleilian/biohub-ct-mix-divaug"
+        second = "example/second-notebook"
+        top_source = f"{top}/1"
+        second_source = f"{second}/2"
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": top_source,
+                    "execution_mode": kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                }
+            ],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "list_kernels",
+                return_value=[{"ref": top}, {"ref": second}],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "resolved_source_kernel",
+                side_effect=[
+                    (top_source, "competition-code-score", 336_636_706),
+                    (second_source, "competition-code-score", 336_600_000),
+                ],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "copy_and_run_public_kernel",
+                side_effect=RuntimeError("second candidate reached"),
+            ) as run_mock,
+        ):
+            kaggle_harvest.process_auto_copy_code_submission(
+                self.competition,
+                state=state,
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=True,
+                now=kaggle_harvest.utc_now(),
+                report=report,
+            )
+
+        run_mock.assert_called_once_with(
+            self.competition,
+            second_source,
+            work_dir=Path("work"),
+            source_session_id=336_600_000,
+        )
+        self.assertIn(f"already attempted source {top_source}", report["skipped"])
+        self.assertIn("second candidate reached", report["errors"][0]["error"])
 
     def test_exact_score_process_keeps_original_submission_rows(self) -> None:
         top = "boristown/dark-agi-biohub-cell-tracking-solution"
@@ -1553,6 +1696,14 @@ class BestScoreVersionTests(unittest.TestCase):
 
         run_mock.assert_not_called()
         self.assertIn(f"already attempted source {source_ref}", report["skipped"])
+        self.assertIn(kaggle_harvest.NO_ELIGIBLE_NOTEBOOK, report["skipped"])
+        self.assertEqual(
+            kaggle_harvest.failed_submission_competitions(
+                [report],
+                submit=True,
+            ),
+            [],
+        )
 
     def test_real_run_without_submission_is_reported_as_failure(self) -> None:
         report = {
@@ -1578,6 +1729,14 @@ class BestScoreVersionTests(unittest.TestCase):
             [],
         )
         report["pending_submissions"] = []
+        report["skipped"] = [kaggle_harvest.NO_ELIGIBLE_NOTEBOOK]
+        self.assertEqual(
+            kaggle_harvest.failed_submission_competitions(
+                [report],
+                submit=True,
+            ),
+            [],
+        )
         report["skipped"] = ["submission limit reached"]
         self.assertEqual(
             kaggle_harvest.failed_submission_competitions(

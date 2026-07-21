@@ -40,6 +40,7 @@ COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
 # harvester implementation can be retried without deleting its audit record.
 EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v2"
 KAGGLE_WEB_BASE = "https://www.kaggle.com"
+NO_ELIGIBLE_NOTEBOOK = "no new eligible notebook found"
 
 
 @dataclass(frozen=True)
@@ -976,7 +977,7 @@ def resolved_source_kernel(
         version, session_id = resolve_competition_code_version(row)
         score = row.get("bestPublicScore")
         print(
-            f"Selected first unpinned Public Score notebook: {base_ref} -> "
+            f"Resolved Public Score candidate: {base_ref} -> "
             f"V{version} (scriptVersionId {session_id}, score {score})"
         )
         return f"{base_ref}/{version}", "competition-code-score", session_id
@@ -2539,10 +2540,12 @@ def process_auto_copy_code_submission(
 
     kernels = list_kernels(comp)
     report["kernels_seen"] = len(kernels)
+    execution_attempts = 0
 
-    # Match the Competition Code page: pinned notebooks are separate, and only
-    # the first unpinned result in Public Score order is eligible for this run.
-    for row in kernels[:1]:
+    # Kaggle returns unpinned notebooks in descending Public Score order. Skip
+    # unusable sources without consuming the execution limit, then run the
+    # first source whose exact version and inputs can be copied.
+    for row in kernels:
         if submit and (remaining_run <= 0 or remaining_attempts <= 0):
             break
 
@@ -2555,7 +2558,7 @@ def process_auto_copy_code_submission(
             source_ref, version_resolution, source_session_id = (
                 resolved_source_kernel(comp, row)
             )
-        except Exception as exc:  # noqa: BLE001 - report an unverifiable top result.
+        except Exception as exc:  # noqa: BLE001 - report an unverifiable candidate.
             report["errors"].append(
                 {
                     "kernel": ref,
@@ -2595,9 +2598,8 @@ def process_auto_copy_code_submission(
                 f"dry-run would clone and run {source_ref}, then submit files matching "
                 f"{comp.file_pattern}"
             )
-            continue
+            break
 
-        remaining_attempts -= 1
         try:
             copy_kwargs: dict[str, Any] = {"work_dir": work_dir}
             if version_resolution == "competition-code-score":
@@ -2605,12 +2607,6 @@ def process_auto_copy_code_submission(
             owned_ref, owned_version, launched_source_ref = (
                 copy_and_run_public_kernel(comp, source_ref, **copy_kwargs)
             )
-            wait_for_kernel_complete(
-                owned_ref,
-                timeout_seconds=comp.notebook_wait_timeout_seconds,
-                poll_seconds=comp.notebook_poll_seconds,
-            )
-            downloaded = download_output(comp, owned_ref, output_dir)
         except ExactSourceUnavailableError as exc:
             reason = error_text(exc)
             rejected = remember_rejected_source(
@@ -2625,7 +2621,9 @@ def process_auto_copy_code_submission(
                 f"rejected source {source_ref}: {reason}"
             )
             continue
-        except Exception as exc:  # noqa: BLE001 - report the top notebook failure.
+        except Exception as exc:  # noqa: BLE001 - an actual copy attempt failed.
+            execution_attempts += 1
+            remaining_attempts -= 1
             report["errors"].append(
                 {
                     "kernel": source_ref,
@@ -2633,6 +2631,29 @@ def process_auto_copy_code_submission(
                     "error": error_text(exc),
                 }
             )
+            if remaining_attempts <= 0:
+                break
+            continue
+
+        execution_attempts += 1
+        remaining_attempts -= 1
+        try:
+            wait_for_kernel_complete(
+                owned_ref,
+                timeout_seconds=comp.notebook_wait_timeout_seconds,
+                poll_seconds=comp.notebook_poll_seconds,
+            )
+            downloaded = download_output(comp, owned_ref, output_dir)
+        except Exception as exc:  # noqa: BLE001 - the selected notebook failed.
+            report["errors"].append(
+                {
+                    "kernel": source_ref,
+                    "stage": "run copied notebook",
+                    "error": error_text(exc),
+                }
+            )
+            if remaining_attempts <= 0:
+                break
             continue
 
         notebook_outputs = sorted(
@@ -2827,6 +2848,15 @@ def process_auto_copy_code_submission(
 
         if remaining_run <= 0 or remaining_attempts <= 0:
             break
+
+    if (
+        submit
+        and execution_attempts == 0
+        and not report.get("submitted")
+        and not report.get("pending_submissions")
+        and not report.get("errors")
+    ):
+        report["skipped"].append(NO_ELIGIBLE_NOTEBOOK)
 
     return report
 
@@ -3087,6 +3117,7 @@ def failed_submission_competitions(
         and not report.get("submitted")
         and not report.get("pending_submissions")
         and "submission limit reached" not in report.get("skipped", [])
+        and NO_ELIGIBLE_NOTEBOOK not in report.get("skipped", [])
     ]
 
 
