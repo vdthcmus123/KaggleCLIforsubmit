@@ -54,7 +54,22 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [],
+  "pending_submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-f4a220e4ca",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel kirneo/metric-hack-last-call-update/11 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scoring_status": "pending",
+      "sha256": "f337a7e27cf3020613dbe822559a100fa2876eb1b72cda6908dc5489977373f1",
+      "source_kernel_ref": "kirneo/metric-hack-last-call-update/11",
+      "submission_ref": 54899332,
+      "submitted_at_utc": "2026-07-22T10:00:15.480987+00:00"
+    }
+  ],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -166,6 +181,24 @@
       "reason": "Could not resolve exact DATA_SOURCE_TYPE_DATASET input '[Private Dataset]'.",
       "rejected_at_utc": "2026-07-20T15:11:26.009494+00:00",
       "source_kernel_ref": "xiaoleilian/biohub-ct-mix-divaug/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "rejected_at_utc": "2026-07-22T09:13:43.224037+00:00",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "nikitagajbhiye30/biohub-00/7"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "rejected_at_utc": "2026-07-22T09:21:53.448985+00:00",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8"
     }
   ],
   "schema_version": 1,
