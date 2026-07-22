@@ -6,7 +6,7 @@ kernel_type = "notebook"
 output_type = "data"
 file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
+max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
 message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
 
@@ -22,7 +22,7 @@ submission_file_name = "submission.csv"
 code_competition = true
 auto_copy_notebook = true
 copy_slug_prefix = "auto"
-notebook_wait_timeout_seconds = 21600
+notebook_wait_timeout_seconds = 2700
 notebook_poll_seconds = 60
 submission_wait_timeout_seconds = 1800
 submission_poll_seconds = 15
@@ -42,7 +42,7 @@ required_columns = [
   "target_id",
 ]
 max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
+max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
 
 [competitions.dataset_shapes]

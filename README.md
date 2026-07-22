@@ -125,7 +125,7 @@ Before pushing, the main values to review are:
 - `auto_copy_notebook = true` - scan unpinned notebooks by descending Public Score, Copy & Edit the first reproducible unattempted result, preserve its exact Kaggle inputs and execution settings, run it, validate its new output, and submit the owned version
 - `source_kernel_versions` - optional manual override for exceptional notebooks; leave empty to use the version linked to the displayed Public Score
 - `dataset_source_versions` - optional manual override for an input dataset version when a public notebook does not pin it itself
-- `notebook_wait_timeout_seconds = 21600` - maximum wait for the cloned notebook run
+- `notebook_wait_timeout_seconds = 2700` - maximum 45-minute wait for each cloned notebook run
 - `submission_wait_timeout_seconds = 1800` - wait inline for Kaggle's asynchronous scorer; after this, keep the accepted submission as pending
 - `submission_poll_seconds = 15` - scorer status polling interval
 - `require_public_score = true` - Biohub is successful only after a public score is present
@@ -135,7 +135,7 @@ Before pushing, the main values to review are:
 - `required_columns = [...]` - require the exact Biohub CSV header; strict row validation remains available for sources that are not linked to a displayed Public Score
 - `dataset_shapes` - require all four test datasets and enforce their `[t, z, y, x]` coordinate bounds
 - `max_submissions_per_run = 1` - submit at most one new file each run
-- `max_submit_attempts_per_run = 1` - launch at most one reproducible notebook per workflow; inaccessible and previously attempted sources are skipped without consuming this limit
+- `max_submit_attempts_per_run = 3` - try up to three ranked notebook versions per workflow; inaccessible, terminally failed, and previously attempted sources are remembered and skipped
 - `max_submissions_per_day = 5` - Biohub's daily submission limit and the local guardrail
 
 For Biohub, Kaggle will not let one account submit another user's notebook
@@ -154,20 +154,19 @@ linked to the score.
 
 For that exact score session, the workflow downloads the original notebook
 source and reconstructs its Copy & Edit settings from Kaggle's version and data
-source metadata. Pinned dataset versions, competition inputs, accelerator, and
-Docker image are preserved before the private notebook is pushed and run. The
-downloaded source bytes are not edited: in particular, `/kaggle/input/...`
-paths remain exactly as the score-linked notebook wrote them. This is required
-because CLI-created copies can retain owner-qualified dataset mounts such as
-`/kaggle/input/datasets/<owner>/<slug>`; rewriting those paths can make an
-otherwise valid notebook fail to import its attached code. A source that
-depends on inaccessible private data, or whose exact version was already
-attempted, is skipped before execution and the scan continues downward. Once
-the first reproducible source is launched, the per-run execution limit applies
-and no lower-scoring notebook is launched in that workflow. If no new
-reproducible source exists, the run finishes successfully as skipped. State
-entries created by the older output-relay implementation do not block this
-exact-copy mode.
+source metadata. Exact dataset versions, competition inputs, accelerator, and
+Docker image are preserved before the private notebook is pushed and run.
+Kaggle can mount the same copied input as either `/kaggle/input/<slug>` or an
+owner-qualified path such as `/kaggle/input/datasets/<owner>/<slug>`. The
+workflow rewrites only known input-root literals to temporary aliases, then
+resolves each alias against both layouts at notebook runtime. The notebook's
+algorithm and output code are otherwise unchanged. A source that depends on
+inaccessible private data, reaches a terminal runtime failure, or was already
+attempted is recorded by exact source version and skipped on later runs. The
+same workflow continues down Public Score order until one notebook submits or
+the bounded three-attempt limit is reached. If no new reproducible source
+exists, the run finishes successfully as skipped. State entries created by the
+older output-relay implementation do not block this exact-copy mode.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or has the wrong header, the source version is rejected;

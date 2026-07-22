@@ -8,6 +8,7 @@ This tool intentionally defaults to dry-run mode. Real submissions require the
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import hashlib
 import json
@@ -41,6 +42,7 @@ COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
 EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v2"
 KAGGLE_WEB_BASE = "https://www.kaggle.com"
 NO_ELIGIBLE_NOTEBOOK = "no new eligible notebook found"
+MOUNT_ALIAS_ROOT = "/tmp/kaggle-input-aliases"
 
 
 @dataclass(frozen=True)
@@ -127,6 +129,15 @@ class SubmissionPendingTimeout(RuntimeError):
 
 class ExactSourceUnavailableError(RuntimeError):
     """Raised when Kaggle will not expose the requested notebook source version."""
+
+
+class KernelRunFailedError(RuntimeError):
+    """Raised when a copied Kaggle notebook reaches a terminal failure state."""
+
+    def __init__(self, status: str, detail: str):
+        self.status = status
+        self.detail = detail
+        super().__init__(f"Kernel run failed with status {status}\n{detail}")
 
 
 class KaggleWebClient:
@@ -1984,7 +1995,8 @@ def metadata_sources_from_session(
             "databundleVersionInfo",
         )
         version_number = maybe_int(version_info.get("versionNumber"))
-        pinned = bool(source.get("isPinned"))
+        if version_number is None:
+            version_number = maybe_int(source.get("versionNumber"))
 
         if "COMPETITION" in source_type:
             ref = resource_ref_from_path(source, "competitions", 1)
@@ -2009,10 +2021,249 @@ def metadata_sources_from_session(
             raise ExactSourceUnavailableError(
                 f"Could not resolve exact {source_type} input {source.get('name')!r}."
             )
-        if pinned and version_number is not None and target != "competition_sources":
+        # A score-linked session is immutable. Kaggle's session endpoint often
+        # omits isPinned even though it exposes the exact attached version, so
+        # always retain that version in the copied notebook metadata.
+        if version_number is not None and target != "competition_sources":
             ref = f"{ref}/{version_number}"
         result[target].append(ref)
     return result
+
+
+def runtime_mount_specs_from_session(
+    data_sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+
+    for index, source in enumerate(data_sources):
+        source_type = str(source.get("sourceType") or "").upper()
+        mount_slug = maybe_str(source.get("mountSlug"))
+        source_slug = maybe_str(source.get("slug"))
+        canonical: str | None = None
+        resource_ref: str | None = None
+
+        if "COMPETITION" in source_type:
+            resource_ref = resource_ref_from_path(source, "competitions", 1)
+            resource_ref = resource_ref or source_slug
+            if resource_ref:
+                canonical = f"competitions/{resource_ref}"
+        elif "DATASET" in source_type:
+            resource_ref = resource_ref_from_path(source, "datasets", 2)
+            if resource_ref:
+                canonical = f"datasets/{resource_ref}"
+        elif any(name in source_type for name in ("NOTEBOOK", "KERNEL", "SCRIPT")):
+            resource_ref = resource_ref_from_path(source, "code", 2)
+            if resource_ref:
+                canonical = f"code/{resource_ref}"
+        elif "MODEL" in source_type:
+            resource_ref = resource_ref_from_path(source, "models", 4)
+            if resource_ref:
+                canonical = f"models/{resource_ref}"
+
+        if not source_slug and resource_ref:
+            source_slug = resource_ref.rstrip("/").rsplit("/", 1)[-1]
+        alias_name = slugify_text(source_slug or f"input-{index}", max_len=56)
+        alias = f"{MOUNT_ALIAS_ROOT}/{index:02d}-{alias_name}"
+
+        relative_roots: list[str] = []
+        for value in (mount_slug, canonical, resource_ref, source_slug):
+            if not value:
+                continue
+            normalized = value.replace("\\", "/").strip()
+            if normalized.startswith("/kaggle/input/"):
+                normalized = normalized[len("/kaggle/input/") :]
+            normalized = normalized.strip("/")
+            if normalized and normalized not in relative_roots:
+                relative_roots.append(normalized)
+
+        candidates = [f"/kaggle/input/{value}" for value in relative_roots]
+        if candidates:
+            specs.append(
+                {
+                    "alias": alias,
+                    "candidates": candidates,
+                }
+            )
+
+    return specs
+
+
+def rewrite_runtime_mount_literals(
+    text: str,
+    specs: list[dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]], int]:
+    replacements: list[tuple[str, str, dict[str, Any]]] = []
+    for spec in specs:
+        alias = str(spec["alias"])
+        for root in spec["candidates"]:
+            replacements.append((str(root), alias, spec))
+            relative = str(root).replace("/kaggle/input/", "../input/", 1)
+            replacements.append((relative, alias, spec))
+
+    rewritten = text
+    used_by_alias: dict[str, dict[str, Any]] = {}
+    replacement_count = 0
+    for root, alias, spec in sorted(
+        replacements,
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        pattern = re.compile(
+            re.escape(root) + r"(?=(?:/|[\"'\s)\],}]|$))"
+        )
+        rewritten, count = pattern.subn(alias, rewritten)
+        if count:
+            replacement_count += count
+            used_by_alias[alias] = spec
+
+    return rewritten, list(used_by_alias.values()), replacement_count
+
+
+def render_runtime_mount_bootstrap(specs: list[dict[str, Any]]) -> str:
+    payload = [
+        {
+            "alias": str(spec["alias"]),
+            "candidates": [str(value) for value in spec["candidates"]],
+        }
+        for spec in specs
+    ]
+    return (
+        "# Kaggle harvester: resolve source-session input aliases at runtime.\n"
+        "from pathlib import Path as _KaggleHarvestPath\n"
+        f"_KAGGLE_HARVEST_MOUNTS = {payload!r}\n"
+        "for _kaggle_mount in _KAGGLE_HARVEST_MOUNTS:\n"
+        "    _kaggle_alias = _KaggleHarvestPath(_kaggle_mount['alias'])\n"
+        "    _kaggle_target = next((\n"
+        "        _KaggleHarvestPath(_candidate)\n"
+        "        for _candidate in _kaggle_mount['candidates']\n"
+        "        if _KaggleHarvestPath(_candidate).is_dir()\n"
+        "    ), None)\n"
+        "    if _kaggle_target is None:\n"
+        "        raise FileNotFoundError(\n"
+        "            'Attached Kaggle input was not mounted at any expected path: '\n"
+        "            + ', '.join(_kaggle_mount['candidates'])\n"
+        "        )\n"
+        "    _kaggle_alias.parent.mkdir(parents=True, exist_ok=True)\n"
+        "    if _kaggle_alias.is_symlink():\n"
+        "        if _kaggle_alias.resolve() != _kaggle_target.resolve():\n"
+        "            _kaggle_alias.unlink()\n"
+        "    elif _kaggle_alias.exists():\n"
+        "        raise RuntimeError(f'Input alias path already exists: {_kaggle_alias}')\n"
+        "    if not _kaggle_alias.is_symlink():\n"
+        "        _kaggle_alias.symlink_to(_kaggle_target, target_is_directory=True)\n"
+        "    print(f'Kaggle input alias: {_kaggle_alias} -> {_kaggle_target}')\n"
+    )
+
+
+def insert_script_bootstrap(source: str, bootstrap: str) -> str:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise ExactSourceUnavailableError(
+            "Could not safely add the Kaggle input compatibility bootstrap to "
+            "the source script."
+        ) from exc
+
+    insert_after = 0
+    body = list(tree.body)
+    position = 0
+    if body and isinstance(body[0], ast.Expr) and isinstance(
+        body[0].value, ast.Constant
+    ) and isinstance(body[0].value.value, str):
+        insert_after = int(body[0].end_lineno or body[0].lineno)
+        position = 1
+    while position < len(body):
+        node = body[position]
+        if not isinstance(node, ast.ImportFrom) or node.module != "__future__":
+            break
+        insert_after = int(node.end_lineno or node.lineno)
+        position += 1
+
+    lines = source.splitlines(keepends=True)
+    lines.insert(insert_after, bootstrap + "\n")
+    return "".join(lines)
+
+
+def adapt_source_runtime_mounts(
+    source: bytes,
+    *,
+    is_notebook: bool,
+    data_sources: list[dict[str, Any]],
+) -> tuple[bytes, int]:
+    specs = runtime_mount_specs_from_session(data_sources)
+    if not specs:
+        return source, 0
+
+    if is_notebook:
+        try:
+            notebook = json.loads(source.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ExactSourceUnavailableError(
+                "Kaggle returned invalid notebook JSON."
+            ) from exc
+
+        used_by_alias: dict[str, dict[str, Any]] = {}
+        replacement_count = 0
+        for cell in notebook.get("cells", []):
+            if not isinstance(cell, dict) or cell.get("cell_type") != "code":
+                continue
+            cell_source = cell.get("source", "")
+            source_is_list = isinstance(cell_source, list)
+            if source_is_list:
+                text = "".join(str(part) for part in cell_source)
+            elif isinstance(cell_source, str):
+                text = cell_source
+            else:
+                continue
+            rewritten, used_specs, count = rewrite_runtime_mount_literals(
+                text,
+                specs,
+            )
+            if not count:
+                continue
+            cell["source"] = (
+                rewritten.splitlines(keepends=True)
+                if source_is_list
+                else rewritten
+            )
+            replacement_count += count
+            for spec in used_specs:
+                used_by_alias[str(spec["alias"])] = spec
+
+        if not replacement_count:
+            return source, 0
+        bootstrap = render_runtime_mount_bootstrap(list(used_by_alias.values()))
+        notebook["cells"].insert(
+            0,
+            {
+                "cell_type": "code",
+                "execution_count": None,
+                "metadata": {"tags": ["kaggle-harvest-input-bootstrap"]},
+                "outputs": [],
+                "source": bootstrap,
+            },
+        )
+        return (
+            json.dumps(notebook, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            ),
+            replacement_count,
+        )
+
+    try:
+        text = source.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ExactSourceUnavailableError(
+            "Kaggle returned a non-UTF-8 source script."
+        ) from exc
+    rewritten, used_specs, replacement_count = rewrite_runtime_mount_literals(
+        text,
+        specs,
+    )
+    if not replacement_count:
+        return source, 0
+    bootstrap = render_runtime_mount_bootstrap(used_specs)
+    return insert_script_bootstrap(rewritten, bootstrap).encode("utf-8"), replacement_count
 
 
 def machine_shape_for_accelerator(accelerator: str) -> str | None:
@@ -2098,6 +2349,16 @@ def download_exact_public_kernel_source(
             f"Kaggle returned invalid input metadata for {source_ref}."
         )
     sources = metadata_sources_from_session(raw_data_sources)
+    source, adjusted_mounts = adapt_source_runtime_mounts(
+        source,
+        is_notebook=is_notebook,
+        data_sources=raw_data_sources,
+    )
+    if adjusted_mounts:
+        print(
+            "Added runtime-compatible Kaggle input aliases for "
+            f"{adjusted_mounts} source path occurrence(s)."
+        )
 
     accelerator = str(settings.get("accelerator") or "NONE").upper()
     run_info = run.get("runInfo") or {}
@@ -2219,14 +2480,14 @@ def copy_and_run_public_kernel(
     timeout = comp.kernel_session_timeout_seconds
     print(f"+ kaggle kernels push -p {local_dir} # full source from {source_ref}")
     result = api.kernels_push(str(local_dir), timeout=timeout)
+    invalid_sources = invalid_push_sources(result)
+    if invalid_sources:
+        raise ExactSourceUnavailableError(
+            "Kaggle rejected pinned kernel inputs: " + ", ".join(invalid_sources)
+        )
     error = maybe_str(getattr(result, "error", None))
     if error:
         raise RuntimeError(f"Kernel push error: {error}")
-    invalid_sources = invalid_push_sources(result)
-    if invalid_sources:
-        raise RuntimeError(
-            "Kaggle rejected pinned kernel inputs: " + ", ".join(invalid_sources)
-        )
 
     version = getattr(result, "versionNumber", None)
     if version is None:
@@ -2288,14 +2549,14 @@ def wait_for_kernel_complete(
         if failure or status in failed or any(
             status.endswith(f"-{item}") for item in failed
         ):
-            detail = f": {failure}" if failure else ""
             log_tail = kernel_log_tail(api, kernel_ref)
             print("--- Kaggle kernel log tail ---")
             print(log_tail)
             print("--- End Kaggle kernel log tail ---")
-            raise RuntimeError(
-                f"Kernel run failed with status {status}{detail}\n"
-                f"Kaggle kernel log tail:\n{log_tail}"
+            raise KernelRunFailedError(
+                status,
+                f"{failure or 'Kaggle reported a terminal failure.'}\n"
+                f"Kaggle kernel log tail:\n{log_tail}",
             )
         if time.monotonic() >= deadline:
             raise TimeoutError(
@@ -2606,6 +2867,30 @@ def process_auto_copy_code_submission(
                 poll_seconds=comp.notebook_poll_seconds,
             )
             downloaded = download_output(comp, owned_ref, output_dir)
+        except KernelRunFailedError as exc:
+            reason = error_text(exc)
+            rejected = remember_rejected_source(
+                state,
+                comp=comp,
+                source_kernel_ref=launched_source_ref,
+                reason=reason,
+                execution_mode=execution_mode,
+            )
+            candidate_report["rejection_reason"] = reason
+            report.setdefault("rejected_sources", []).append(rejected)
+            report["errors"].append(
+                {
+                    "kernel": launched_source_ref,
+                    "stage": "run copied notebook",
+                    "error": reason,
+                }
+            )
+            report["skipped"].append(
+                f"rejected source {launched_source_ref}: terminal notebook failure"
+            )
+            if remaining_attempts <= 0:
+                break
+            continue
         except Exception as exc:  # noqa: BLE001 - the selected notebook failed.
             report["errors"].append(
                 {

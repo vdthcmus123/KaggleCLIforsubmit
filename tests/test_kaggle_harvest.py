@@ -46,7 +46,8 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(self.competition.submission_file_name, "submission.csv")
         self.assertTrue(self.competition.require_public_score)
-        self.assertEqual(self.competition.max_submit_attempts_per_run, 1)
+        self.assertEqual(self.competition.max_submit_attempts_per_run, 3)
+        self.assertEqual(self.competition.notebook_wait_timeout_seconds, 2700)
         self.assertEqual(self.competition.max_submissions_per_day, 5)
 
     def test_competition_code_list_excludes_pinned_and_keeps_ui_order(self) -> None:
@@ -135,7 +136,7 @@ class BestScoreVersionTests(unittest.TestCase):
             {"kernelId": 127_764_376, "sortOption": "VERSION_ID"},
         )
 
-    def test_exact_score_copy_preserves_source_bytes_inputs_and_runtime(self) -> None:
+    def test_exact_score_copy_adapts_both_kaggle_input_mount_layouts(self) -> None:
         source_ref = "boristown/dark-agi-biohub-cell-tracking-solution/7"
         notebook = json.dumps(
             {
@@ -181,6 +182,11 @@ class BestScoreVersionTests(unittest.TestCase):
                     "dataSources": [
                         {
                             "sourceType": "DATA_SOURCE_TYPE_COMPETITION",
+                            "mountSlug": (
+                                "competitions/"
+                                "biohub-cell-tracking-during-development"
+                            ),
+                            "slug": "biohub-cell-tracking-during-development",
                             "sourceUrl": (
                                 "/competitions/"
                                 "biohub-cell-tracking-during-development"
@@ -192,11 +198,16 @@ class BestScoreVersionTests(unittest.TestCase):
                         },
                         {
                             "sourceType": "DATA_SOURCE_TYPE_DATASET",
+                            "mountSlug": (
+                                "datasets/pilkwang/"
+                                "biohub-tracking-support-pack-50ep-v1"
+                            ),
+                            "slug": "biohub-tracking-support-pack-50ep-v1",
                             "sourceUrl": (
                                 "/datasets/pilkwang/"
                                 "biohub-tracking-support-pack-50ep-v1"
                             ),
-                            "isPinned": True,
+                            "isPinned": False,
                             "databundleVersion": {
                                 "databundleVersionInfo": {"versionNumber": 10}
                             },
@@ -223,17 +234,39 @@ class BestScoreVersionTests(unittest.TestCase):
             )
             source = (folder / "source.ipynb").read_bytes()
 
-        self.assertEqual(source, notebook)
-        source_text = source.decode("utf-8")
+        self.assertNotEqual(source, notebook)
+        adapted = json.loads(source.decode("utf-8"))
+        self.assertEqual(len(adapted["cells"]), 2)
+        bootstrap = adapted["cells"][0]["source"]
+        compile(bootstrap, "<kaggle-input-bootstrap>", "exec")
+        source_text = "".join(adapted["cells"][1]["source"])
         self.assertIn(
-            "/kaggle/input/datasets/pilkwang/"
+            "/tmp/kaggle-input-aliases/01-"
             "biohub-tracking-support-pack-50ep-v1/repo/src",
             source_text,
         )
         self.assertIn(
-            "/kaggle/input/competitions/"
+            "/tmp/kaggle-input-aliases/00-"
             "biohub-cell-tracking-during-development/test",
             source_text,
+        )
+        self.assertIn(
+            "/kaggle/input/datasets/pilkwang/"
+            "biohub-tracking-support-pack-50ep-v1",
+            bootstrap,
+        )
+        self.assertIn(
+            "/kaggle/input/biohub-tracking-support-pack-50ep-v1",
+            bootstrap,
+        )
+        self.assertIn(
+            "/kaggle/input/competitions/"
+            "biohub-cell-tracking-during-development",
+            bootstrap,
+        )
+        self.assertIn(
+            "/kaggle/input/biohub-cell-tracking-during-development",
+            bootstrap,
         )
         self.assertEqual(
             metadata["competition_sources"],
@@ -247,10 +280,11 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(metadata["machine_shape"], "NvidiaTeslaT4")
         self.assertTrue(metadata["docker_image"].endswith(digest))
 
-    def test_run_stops_after_first_launched_candidate_fails(self) -> None:
+    def test_terminal_failure_is_remembered_and_next_candidate_submits(self) -> None:
         top = "boristown/dark-agi-biohub-cell-tracking-solution"
         second = "example/second-notebook"
-        source_ref = f"{top}/7"
+        top_source = f"{top}/7"
+        second_source = f"{second}/2"
         state = {
             "schema_version": 1,
             "submissions": [],
@@ -265,43 +299,73 @@ class BestScoreVersionTests(unittest.TestCase):
             "errors": [],
         }
 
-        with (
-            patch.object(
-                kaggle_harvest,
-                "list_kernels",
-                return_value=[{"ref": top}, {"ref": second}],
-            ),
-            patch.object(
-                kaggle_harvest,
-                "resolved_source_kernel",
-                return_value=(source_ref, "competition-code-score", 336_369_307),
-            ) as resolve_mock,
-            patch.object(
-                kaggle_harvest,
-                "copy_and_run_public_kernel",
-                side_effect=RuntimeError("top notebook failed"),
-            ) as run_mock,
-        ):
-            kaggle_harvest.process_auto_copy_code_submission(
-                self.competition,
-                state=state,
-                output_dir=Path("submissions"),
-                work_dir=Path("work"),
-                submit=True,
-                now=kaggle_harvest.utc_now(),
-                report=report,
-            )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            submission = folder / "submission.csv"
+            submission.touch()
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": top}, {"ref": second}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    side_effect=[
+                        (top_source, "competition-code-score", 336_369_307),
+                        (second_source, "competition-code-score", 336_300_000),
+                    ],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    side_effect=[
+                        ("example/top-clone", "1", top_source),
+                        ("example/second-clone", "1", second_source),
+                    ],
+                ) as run_mock,
+                patch.object(
+                    kaggle_harvest,
+                    "wait_for_kernel_complete",
+                    side_effect=[
+                        kaggle_harvest.KernelRunFailedError(
+                            "error",
+                            "ModuleNotFoundError: biohub_tracking",
+                        ),
+                        "complete",
+                    ],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ),
+                patch.object(kaggle_harvest, "sha256_file", return_value="abc"),
+                patch.object(kaggle_harvest, "submit_file", return_value=123),
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
 
-        resolve_mock.assert_called_once_with(self.competition, {"ref": top})
-        run_mock.assert_called_once_with(
-            self.competition,
-            source_ref,
-            work_dir=Path("work"),
-            source_session_id=336_369_307,
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(
+            state["rejected_sources"][0]["source_kernel_ref"],
+            top_source,
         )
-        self.assertEqual(len(report["candidates"]), 1)
-        self.assertEqual(report["candidates"][0]["kernel"], top)
-        self.assertIn("top notebook failed", report["errors"][0]["error"])
+        self.assertEqual(report["submitted"][0]["source_kernel_ref"], second_source)
+        self.assertIn("ModuleNotFoundError", report["errors"][0]["error"])
 
     def test_unavailable_top_falls_through_to_first_copyable_candidate(self) -> None:
         top = "xiaoleilian/biohub-ct-mix-divaug"
