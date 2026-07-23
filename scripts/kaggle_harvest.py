@@ -1091,31 +1091,75 @@ def source_kernel_already_submitted(
     )
 
 
+def execution_mode_matches(
+    item: dict[str, Any],
+    execution_mode: str | None,
+) -> bool:
+    return (
+        execution_mode is None
+        or item.get("execution_mode") == execution_mode
+        or (
+            item.get("execution_mode") is None
+            and execution_mode != EXACT_SCORE_COPY_MODE
+        )
+    )
+
+
+def attempted_state_records(
+    state: dict[str, Any],
+    competition: str,
+    *,
+    execution_mode: str | None,
+    allow_successful_replay: bool,
+) -> list[dict[str, Any]]:
+    successful_hashes = {
+        str(item.get("sha256", "")).lower()
+        for item in state.get("submissions", [])
+        if item.get("competition") == competition
+        and str(item.get("sha256", ""))
+        and execution_mode_matches(item, execution_mode)
+    }
+    rejected = [
+        item
+        for item in state.get("rejected_sources", [])
+        if not (
+            allow_successful_replay
+            and str(item.get("reason", "")).startswith(
+                "submission hash already attempted:"
+            )
+            and str(item.get("sha256", "")).lower() in successful_hashes
+        )
+    ]
+    attempts = [
+        *([] if allow_successful_replay else state.get("submissions", [])),
+        *state.get("pending_submissions", []),
+        *state.get("failed_submissions", []),
+        *rejected,
+    ]
+    return [
+        item
+        for item in attempts
+        if item.get("competition") == competition
+        and execution_mode_matches(item, execution_mode)
+    ]
+
+
 def source_kernel_already_attempted(
     state: dict[str, Any],
     competition: str,
     source_ref: str,
     *,
     execution_mode: str | None = None,
+    allow_successful_replay: bool = False,
 ) -> bool:
-    attempts = [
-        *state.get("submissions", []),
-        *state.get("pending_submissions", []),
-        *state.get("failed_submissions", []),
-        *state.get("rejected_sources", []),
-    ]
     return any(
-        item.get("competition") == competition
-        and item.get("source_kernel_ref") == source_ref
-        and (
-            execution_mode is None
-            or item.get("execution_mode") == execution_mode
-            or (
-                item.get("execution_mode") is None
-                and execution_mode != EXACT_SCORE_COPY_MODE
-            )
+        item.get("source_kernel_ref") == source_ref
+        for item in attempted_state_records(
+            state,
+            competition,
+            execution_mode=execution_mode,
+            allow_successful_replay=allow_successful_replay,
         )
-        for item in attempts
     )
 
 
@@ -1125,27 +1169,18 @@ def submission_hash_already_attempted(
     file_hash: str,
     *,
     execution_mode: str | None = None,
+    allow_successful_replay: bool = False,
 ) -> bool:
     if not file_hash:
         return False
-    attempts = [
-        *state.get("submissions", []),
-        *state.get("pending_submissions", []),
-        *state.get("failed_submissions", []),
-        *state.get("rejected_sources", []),
-    ]
     return any(
-        item.get("competition") == competition
-        and str(item.get("sha256", "")).lower() == file_hash.lower()
-        and (
-            execution_mode is None
-            or item.get("execution_mode") == execution_mode
-            or (
-                item.get("execution_mode") is None
-                and execution_mode != EXACT_SCORE_COPY_MODE
-            )
+        str(item.get("sha256", "")).lower() == file_hash.lower()
+        for item in attempted_state_records(
+            state,
+            competition,
+            execution_mode=execution_mode,
+            allow_successful_replay=allow_successful_replay,
         )
-        for item in attempts
     )
 
 
@@ -2812,6 +2847,7 @@ def process_auto_copy_code_submission(
             comp.slug,
             source_ref,
             execution_mode=execution_mode,
+            allow_successful_replay=execution_mode == EXACT_SCORE_COPY_MODE,
         ):
             report["skipped"].append(f"already attempted source {source_ref}")
             continue
@@ -2996,6 +3032,9 @@ def process_auto_copy_code_submission(
                     comp.slug,
                     file_hash,
                     execution_mode=execution_mode,
+                    allow_successful_replay=(
+                        execution_mode == EXACT_SCORE_COPY_MODE
+                    ),
                 ):
                     reason = f"submission hash already attempted: {file_hash}"
                     report["skipped"].append(
@@ -3146,7 +3185,7 @@ def process_competition(
             report["pending_reconciliation"] = pending_outcome
             if pending_outcome["active"]:
                 report["skipped"].append("submission still pending")
-            return report
+                return report
 
     if comp.code_competition and comp.auto_copy_notebook:
         return process_auto_copy_code_submission(

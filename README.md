@@ -161,12 +161,14 @@ owner-qualified path such as `/kaggle/input/datasets/<owner>/<slug>`. The
 workflow rewrites only known input-root literals to temporary aliases, then
 resolves each alias against both layouts at notebook runtime. The notebook's
 algorithm and output code are otherwise unchanged. A source that depends on
-inaccessible private data, reaches a terminal runtime failure, or was already
-attempted is recorded by exact source version and skipped on later runs. The
-same workflow continues down Public Score order until one notebook submits or
-the bounded three-attempt limit is reached. If no new reproducible source
-exists, the run finishes successfully as skipped. State entries created by the
-older output-relay implementation do not block this exact-copy mode.
+inaccessible private data, reaches a terminal runtime failure, produces an
+invalid output, or previously failed Kaggle scoring is recorded by exact source
+version and skipped on later runs. A successfully scored source remains
+eligible on future scheduled runs, and an output hash matching a successful
+submission does not force the scan down to a lower Public Score. The workflow
+therefore keeps selecting the highest-ranked reproducible notebook on every
+run, while still continuing downward when a higher source is genuinely
+unusable. Each run is bounded to three launched candidates.
 
 For Biohub, only the source version's native `submission.csv` is eligible.
 If that file is absent or has the wrong header, the source version is rejected;
@@ -179,9 +181,11 @@ API acceptance alone is not treated as scored success: the workflow waits for
 final scoring and checks `error_description`. If scoring is still pending after
 the inline timeout, the accepted submission is stored as pending and the run
 finishes successfully. The next scheduled run reconciles that same submission
-ID before doing any new work, so it does not consume a duplicate submission.
-Only an actual Kaggle scoring error is recorded as failed; both pending and
-failed attempts still count toward the daily limit.
+ID first, so it does not submit while the earlier result is unresolved. If the
+pending result has finished, that same run continues to the ranked scan and
+creates its scheduled submission. Only an actual Kaggle scoring error is
+recorded as failed; both pending and failed attempts still count toward the
+daily limit.
 
 ## Notes
 

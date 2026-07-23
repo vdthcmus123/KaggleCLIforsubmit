@@ -1523,6 +1523,52 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(len(report["errors"]), 1)
 
+    def test_completed_pending_reconciliation_continues_ranked_scan(self) -> None:
+        state = {
+            "schema_version": 1,
+            "submissions": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+
+        def continue_scan(
+            _comp: object,
+            **kwargs: object,
+        ) -> dict[str, object]:
+            report = kwargs["report"]
+            assert isinstance(report, dict)
+            report["continued_after_reconcile"] = True
+            return report
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "reconcile_pending_submissions",
+                return_value={"active": 0, "completed": 1, "failed": 0},
+            ),
+            patch.object(
+                kaggle_harvest,
+                "process_auto_copy_code_submission",
+                side_effect=continue_scan,
+            ) as scan_mock,
+        ):
+            report = kaggle_harvest.process_competition(
+                self.competition,
+                state=state,
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=True,
+                now=kaggle_harvest.utc_now(),
+            )
+
+        scan_mock.assert_called_once()
+        self.assertTrue(report["continued_after_reconcile"])
+        self.assertEqual(
+            report["pending_reconciliation"],
+            {"active": 0, "completed": 1, "failed": 0},
+        )
+
     def test_download_output_removes_files_from_an_older_clone_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)
@@ -1657,6 +1703,158 @@ class BestScoreVersionTests(unittest.TestCase):
                 "new-hash",
             )
         )
+
+    def test_successful_exact_copy_and_its_duplicate_rejection_can_replay(
+        self,
+    ) -> None:
+        successful_source = "example/successful/1"
+        duplicate_source = "example/duplicate/2"
+        file_hash = "ABC123"
+        state = {
+            "submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": successful_source,
+                    "sha256": file_hash,
+                    "execution_mode": kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                }
+            ],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": duplicate_source,
+                    "sha256": file_hash,
+                    "reason": (
+                        "submission hash already attempted: "
+                        f"{file_hash.lower()}"
+                    ),
+                    "execution_mode": kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                }
+            ],
+        }
+
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                successful_source,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                allow_successful_replay=True,
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                duplicate_source,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                allow_successful_replay=True,
+            )
+        )
+        self.assertFalse(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                file_hash.lower(),
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                allow_successful_replay=True,
+            )
+        )
+
+    def test_ranked_scan_replays_successful_top_source_before_lower_score(
+        self,
+    ) -> None:
+        top = "example/top-notebook"
+        lower = "example/lower-notebook"
+        top_source = f"{top}/3"
+        file_hash = "top-output-hash"
+        state = {
+            "schema_version": 1,
+            "submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": top_source,
+                    "sha256": file_hash,
+                    "execution_mode": kaggle_harvest.EXACT_SCORE_COPY_MODE,
+                }
+            ],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            submission = folder / "submission.csv"
+            submission.touch()
+            with (
+                patch.object(
+                    kaggle_harvest,
+                    "list_kernels",
+                    return_value=[{"ref": top}, {"ref": lower}],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "resolved_source_kernel",
+                    return_value=(
+                        top_source,
+                        "competition-code-score",
+                        330_003_000,
+                    ),
+                ) as resolve_mock,
+                patch.object(
+                    kaggle_harvest,
+                    "copy_and_run_public_kernel",
+                    return_value=("example/top-clone", "2", top_source),
+                ) as run_mock,
+                patch.object(kaggle_harvest, "wait_for_kernel_complete"),
+                patch.object(
+                    kaggle_harvest,
+                    "download_output",
+                    return_value=[submission],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "validate_submission_file",
+                    return_value=[],
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "sha256_file",
+                    return_value=file_hash,
+                ),
+                patch.object(
+                    kaggle_harvest,
+                    "submit_file",
+                    return_value=456,
+                ) as submit_mock,
+            ):
+                kaggle_harvest.process_auto_copy_code_submission(
+                    self.competition,
+                    state=state,
+                    output_dir=folder,
+                    work_dir=folder,
+                    submit=True,
+                    now=kaggle_harvest.utc_now(),
+                    report=report,
+                )
+
+        resolve_mock.assert_called_once_with(self.competition, {"ref": top})
+        run_mock.assert_called_once()
+        submit_mock.assert_called_once()
+        self.assertEqual(report["submitted"][0]["source_kernel_ref"], top_source)
 
     def test_legacy_attempts_do_not_block_exact_score_copy_mode(self) -> None:
         source_ref = f"{SOURCE_KERNEL}/25"
