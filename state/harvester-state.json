@@ -59,15 +59,15 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6dc5671025",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-competition-solution/12 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-18948ea3db",
+      "kernel_version": "5",
+      "message": "AUTO Biohub public kernel nikitagajbhiye30/biohub-00/7 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scoring_status": "pending",
-      "sha256": "b058536efae2b21259df02584868e2f56bfd439290d97b8470dfff064ff52915",
-      "source_kernel_ref": "kaiwalyaatulraut/biohub-competition-solution/12",
-      "submission_ref": 54919267,
-      "submitted_at_utc": "2026-07-23T05:13:09.117707+00:00"
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "nikitagajbhiye30/biohub-00/7",
+      "submission_ref": 54923011,
+      "submitted_at_utc": "2026-07-23T08:43:26.066167+00:00"
     }
   ],
   "rejected_sources": [
@@ -265,6 +265,21 @@
       "source_kernel_ref": "kirneo/metric-hack-last-call-update/11",
       "submission_ref": 54899332,
       "submitted_at_utc": "2026-07-22T10:00:15.480987+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6dc5671025",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-competition-solution/12 file submission.csv",
+      "public_score": "0.883",
+      "scored_at_utc": "2026-07-23T08:04:58.823393+00:00",
+      "scoring_status": "complete",
+      "sha256": "b058536efae2b21259df02584868e2f56bfd439290d97b8470dfff064ff52915",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-competition-solution/12",
+      "submission_ref": 54919267,
+      "submitted_at_utc": "2026-07-23T05:13:09.117707+00:00"
     }
   ]
 }
