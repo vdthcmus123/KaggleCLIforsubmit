@@ -54,7 +54,22 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [],
+  "pending_submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6dc5671025",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-competition-solution/12 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scoring_status": "pending",
+      "sha256": "b058536efae2b21259df02584868e2f56bfd439290d97b8470dfff064ff52915",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-competition-solution/12",
+      "submission_ref": 54919267,
+      "submitted_at_utc": "2026-07-23T05:13:09.117707+00:00"
+    }
+  ],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -184,6 +199,24 @@
       "rejected_at_utc": "2026-07-22T09:21:53.448985+00:00",
       "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: f337a7e27cf3020613dbe822559a100fa2876eb1b72cda6908dc5489977373f1",
+      "rejected_at_utc": "2026-07-23T04:25:41.504802+00:00",
+      "sha256": "f337a7e27cf3020613dbe822559a100fa2876eb1b72cda6908dc5489977373f1",
+      "source_kernel_ref": "kirneo/metric-hack-last-call-update/13"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "rejected_at_utc": "2026-07-23T04:34:50.854326+00:00",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-solution/1"
     }
   ],
   "schema_version": 1,
