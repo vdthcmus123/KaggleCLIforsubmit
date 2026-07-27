@@ -59,15 +59,15 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-18948ea3db",
-      "kernel_version": "12",
-      "message": "AUTO Biohub public kernel nikitagajbhiye30/biohub-00/7 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
+      "kernel_version": "4",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scoring_status": "pending",
       "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
-      "source_kernel_ref": "nikitagajbhiye30/biohub-00/7",
-      "submission_ref": 55003844,
-      "submitted_at_utc": "2026-07-26T15:06:47.180066+00:00"
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
+      "submission_ref": 55018691,
+      "submitted_at_utc": "2026-07-27T05:17:32.593871+00:00"
     }
   ],
   "rejected_sources": [
@@ -385,6 +385,21 @@
       "source_kernel_ref": "nikitagajbhiye30/biohub-00/7",
       "submission_ref": 54991541,
       "submitted_at_utc": "2026-07-26T05:06:51.579003+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-18948ea3db",
+      "kernel_version": "12",
+      "message": "AUTO Biohub public kernel nikitagajbhiye30/biohub-00/7 file submission.csv",
+      "public_score": "0.885",
+      "scored_at_utc": "2026-07-27T04:39:10.977300+00:00",
+      "scoring_status": "complete",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "nikitagajbhiye30/biohub-00/7",
+      "submission_ref": 55003844,
+      "submitted_at_utc": "2026-07-26T15:06:47.180066+00:00"
     }
   ]
 }
