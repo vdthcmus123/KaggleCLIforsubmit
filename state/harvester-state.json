@@ -60,14 +60,14 @@
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
-      "kernel_version": "23",
+      "kernel_version": "24",
       "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "pending_reason": "timed out after 1800s waiting for final scoring; last API error: 500 Server Error: Internal Server Error for url: https://api.kaggle.com/v1/competitions.CompetitionApiService/ListSubmissions\nHTTP status: 500 Internal Server Error\nURL: https://api.kaggle.com/v1/competitions.CompetitionApiService/ListSubmissions\nResponse body: {\"error\":{\"code\":500,\"message\":\"Internal error\",\"status\":\"INTERNAL\"}}",
       "scoring_status": "pending",
       "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
-      "submission_ref": 55288365,
-      "submitted_at_utc": "2026-08-06T04:54:12.490746+00:00"
+      "submission_ref": 55301858,
+      "submitted_at_utc": "2026-08-06T15:55:18.765269+00:00"
     }
   ],
   "rejected_sources": [
@@ -685,6 +685,21 @@
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
       "submission_ref": 55274061,
       "submitted_at_utc": "2026-08-05T15:51:17.165507+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
+      "kernel_version": "23",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
+      "public_score": "0.885",
+      "scored_at_utc": "2026-08-06T15:16:54.133472+00:00",
+      "scoring_status": "complete",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
+      "submission_ref": 55288365,
+      "submitted_at_utc": "2026-08-06T04:54:12.490746+00:00"
     }
   ]
 }
