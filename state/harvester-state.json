@@ -60,14 +60,14 @@
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
-      "kernel_version": "36",
+      "kernel_version": "37",
       "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scoring_status": "pending",
       "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
-      "submission_ref": 55568536,
-      "submitted_at_utc": "2026-08-17T02:58:37.884538+00:00"
+      "submission_ref": 55579509,
+      "submitted_at_utc": "2026-08-17T14:17:33.811884+00:00"
     }
   ],
   "rejected_sources": [
@@ -880,6 +880,21 @@
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
       "submission_ref": 55554311,
       "submitted_at_utc": "2026-08-16T14:08:22.342508+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
+      "kernel_version": "36",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
+      "public_score": "0.885",
+      "scored_at_utc": "2026-08-17T13:38:17.425176+00:00",
+      "scoring_status": "complete",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
+      "submission_ref": 55568536,
+      "submitted_at_utc": "2026-08-17T02:58:37.884538+00:00"
     }
   ]
 }
