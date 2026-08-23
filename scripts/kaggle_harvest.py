@@ -40,6 +40,10 @@ COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
 # Bump when copy execution semantics change so a source broken by an older
 # harvester implementation can be retried without deleting its audit record.
 EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v2"
+COMPETITION_CODE_SORTS = {
+    "hotness": ("HOTNESS", "Hotness"),
+    "scoreDescending": ("SCORE_DESCENDING", "Public-Score-descending"),
+}
 KAGGLE_WEB_BASE = "https://www.kaggle.com"
 NO_ELIGIBLE_NOTEBOOK = "no new eligible notebook found"
 MOUNT_ALIAS_ROOT = "/tmp/kaggle-input-aliases"
@@ -644,16 +648,19 @@ def competition_code_list_request(
     comp: Competition,
     competition_id: int,
 ) -> dict[str, Any]:
-    if comp.sort_by != "scoreDescending":
+    sort_setting = COMPETITION_CODE_SORTS.get(comp.sort_by)
+    if sort_setting is None:
         raise ValueError(
-            "Exact Competition Code selection requires sort_by='scoreDescending'."
+            "Competition Code selection supports sort_by='hotness' or "
+            "sort_by='scoreDescending'."
         )
+    api_sort, _ = sort_setting
     return {
         "kernelFilterCriteria": {
             "search": comp.search or "",
             "listRequest": {
                 "competitionId": competition_id,
-                "sortBy": "SCORE_DESCENDING",
+                "sortBy": api_sort,
                 "pageSize": min(max(comp.top_n, 1), 100),
                 "group": "EVERYONE",
                 "page": 1,
@@ -688,9 +695,10 @@ def list_competition_code_kernels(
     page_url = f"{KAGGLE_WEB_BASE}/competitions/{comp.slug}/code"
     html = client.get_text(page_url)
     competition_id = competition_id_from_html(html)
+    _, sort_label = COMPETITION_CODE_SORTS[comp.sort_by]
     print(
         "+ Kaggle Competition Code list "
-        f"{comp.slug} --sort-by Public-Score-descending --unpinned"
+        f"{comp.slug} --sort-by {sort_label} --unpinned --fresh-scan"
     )
     result = client.post_json(
         "ListKernels",
@@ -701,7 +709,7 @@ def list_competition_code_kernels(
         raise ValueError("Kaggle Competition Code response has invalid kernels data.")
 
     rows: list[dict[str, Any]] = []
-    for raw in raw_kernels:
+    for scan_rank, raw in enumerate(raw_kernels, start=1):
         if not isinstance(raw, dict):
             continue
         script_url = maybe_str(raw.get("scriptUrl"))
@@ -711,6 +719,7 @@ def list_competition_code_kernels(
         row = dict(raw)
         row["ref"] = match.group(1)
         row["kernelId"] = raw.get("id")
+        row["scanRank"] = scan_rank
         rows.append(row)
     return rows
 
@@ -1110,31 +1119,12 @@ def attempted_state_records(
     competition: str,
     *,
     execution_mode: str | None,
-    allow_successful_replay: bool,
 ) -> list[dict[str, Any]]:
-    successful_hashes = {
-        str(item.get("sha256", "")).lower()
-        for item in state.get("submissions", [])
-        if item.get("competition") == competition
-        and str(item.get("sha256", ""))
-        and execution_mode_matches(item, execution_mode)
-    }
-    rejected = [
-        item
-        for item in state.get("rejected_sources", [])
-        if not (
-            allow_successful_replay
-            and str(item.get("reason", "")).startswith(
-                "submission hash already attempted:"
-            )
-            and str(item.get("sha256", "")).lower() in successful_hashes
-        )
-    ]
     attempts = [
-        *([] if allow_successful_replay else state.get("submissions", [])),
+        *state.get("submissions", []),
         *state.get("pending_submissions", []),
         *state.get("failed_submissions", []),
-        *rejected,
+        *state.get("rejected_sources", []),
     ]
     return [
         item
@@ -1150,7 +1140,6 @@ def source_kernel_already_attempted(
     source_ref: str,
     *,
     execution_mode: str | None = None,
-    allow_successful_replay: bool = False,
 ) -> bool:
     return any(
         item.get("source_kernel_ref") == source_ref
@@ -1158,7 +1147,6 @@ def source_kernel_already_attempted(
             state,
             competition,
             execution_mode=execution_mode,
-            allow_successful_replay=allow_successful_replay,
         )
     )
 
@@ -1169,7 +1157,6 @@ def submission_hash_already_attempted(
     file_hash: str,
     *,
     execution_mode: str | None = None,
-    allow_successful_replay: bool = False,
 ) -> bool:
     if not file_hash:
         return False
@@ -1179,7 +1166,6 @@ def submission_hash_already_attempted(
             state,
             competition,
             execution_mode=execution_mode,
-            allow_successful_replay=allow_successful_replay,
         )
     )
 
@@ -2800,16 +2786,29 @@ def process_auto_copy_code_submission(
     report["kernels_seen"] = len(kernels)
     execution_attempts = 0
 
-    # Kaggle returns unpinned notebooks in descending Public Score order. Skip
-    # unusable sources without consuming the execution limit, then run the
-    # first source whose exact version and inputs can be copied.
-    for row in kernels:
+    # Every invocation receives a fresh unpinned list in Kaggle's configured UI
+    # order. Walk it from the beginning and run the first new, scored source
+    # whose exact score-linked version and inputs can be copied.
+    for fallback_rank, row in enumerate(kernels, start=1):
         if submit and (remaining_run <= 0 or remaining_attempts <= 0):
             break
+
+        scan_rank = int(row.get("scanRank") or fallback_rank)
 
         ref = kernel_ref(row)
         if not ref:
             report["errors"].append({"row": row, "error": "could not find kernel ref"})
+            continue
+
+        public_score = row.get("bestPublicScore")
+        if (
+            comp.require_public_score
+            and "scanRank" in row
+            and public_score is None
+        ):
+            report["skipped"].append(
+                f"rank {scan_rank} has no Public Score: {ref}"
+            )
             continue
 
         try:
@@ -2836,6 +2835,8 @@ def process_auto_copy_code_submission(
             "source_kernel_ref": source_ref,
             "version_resolution": version_resolution,
             "source_session_id": source_session_id,
+            "scan_rank": scan_rank,
+            "source_public_score": public_score,
             "execution_mode": execution_mode,
             "file_pattern": comp.file_pattern,
             "matching_files": [],
@@ -2846,8 +2847,6 @@ def process_auto_copy_code_submission(
             state,
             comp.slug,
             source_ref,
-            execution_mode=execution_mode,
-            allow_successful_replay=execution_mode == EXACT_SCORE_COPY_MODE,
         ):
             report["skipped"].append(f"already attempted source {source_ref}")
             continue
@@ -3031,10 +3030,6 @@ def process_auto_copy_code_submission(
                     state,
                     comp.slug,
                     file_hash,
-                    execution_mode=execution_mode,
-                    allow_successful_replay=(
-                        execution_mode == EXACT_SCORE_COPY_MODE
-                    ),
                 ):
                     reason = f"submission hash already attempted: {file_hash}"
                     report["skipped"].append(
@@ -3080,6 +3075,8 @@ def process_auto_copy_code_submission(
                     "submission_ref": submission_ref,
                     "scoring_status": "complete",
                     "execution_mode": execution_mode,
+                    "scan_rank": scan_rank,
+                    "source_public_score": public_score,
                 }
                 state["submissions"].append(record)
                 report["submitted"].append(record)
@@ -3097,6 +3094,8 @@ def process_auto_copy_code_submission(
                     pending=exc,
                     execution_mode=execution_mode,
                 )
+                pending_record["scan_rank"] = scan_rank
+                pending_record["source_public_score"] = public_score
                 report.setdefault("pending_submissions", []).append(
                     pending_record
                 )
@@ -3124,6 +3123,8 @@ def process_auto_copy_code_submission(
                         error=exc,
                         execution_mode=execution_mode,
                     )
+                    failed_record["scan_rank"] = scan_rank
+                    failed_record["source_public_score"] = public_score
                     report.setdefault("failed_submissions", []).append(
                         failed_record
                     )

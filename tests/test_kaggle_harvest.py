@@ -38,6 +38,7 @@ class BestScoreVersionTests(unittest.TestCase):
         return notebook_html(self.version_sessions[version])
 
     def test_biohub_config_uses_dynamic_resolution(self) -> None:
+        self.assertEqual(self.competition.sort_by, "hotness")
         self.assertEqual(self.competition.source_kernel_versions, {})
         self.assertEqual(self.competition.dataset_source_versions, {})
         self.assertEqual(
@@ -51,6 +52,12 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(self.competition.max_submissions_per_day, 5)
 
     def test_competition_code_list_excludes_pinned_and_keeps_ui_order(self) -> None:
+        unscored = {
+            "id": 127_000_000,
+            "scriptVersionId": 336_400_000,
+            "bestPublicScore": None,
+            "scriptUrl": "/code/example/hot-but-unscored",
+        }
         top = {
             "id": 127_764_376,
             "scriptVersionId": 336_369_307,
@@ -72,7 +79,7 @@ class BestScoreVersionTests(unittest.TestCase):
             get_text=Mock(return_value='{"ref":"/Competitions/136605"}'),
             post_json=Mock(
                 return_value={
-                    "kernels": [top, second],
+                    "kernels": [unscored, top, second],
                     "pinnedKernels": [pinned],
                 }
             ),
@@ -86,10 +93,12 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(
             [row["ref"] for row in rows],
             [
+                "example/hot-but-unscored",
                 "boristown/dark-agi-biohub-cell-tracking-solution",
                 "example/second-notebook",
             ],
         )
+        self.assertEqual([row["scanRank"] for row in rows], [1, 2, 3])
         endpoint, request = client.post_json.call_args.args
         self.assertEqual(endpoint, "ListKernels")
         self.assertEqual(
@@ -98,8 +107,65 @@ class BestScoreVersionTests(unittest.TestCase):
         )
         self.assertEqual(
             request["kernelFilterCriteria"]["listRequest"]["sortBy"],
-            "SCORE_DESCENDING",
+            "HOTNESS",
         )
+
+    def test_hotness_scan_skips_unscored_row_before_resolving(self) -> None:
+        unscored = {
+            "ref": "example/hot-but-unscored",
+            "scanRank": 1,
+            "bestPublicScore": None,
+        }
+        scored = {
+            "ref": "example/scored",
+            "scanRank": 2,
+            "bestPublicScore": 0.91,
+        }
+        report = {
+            "competition": self.competition.slug,
+            "candidates": [],
+            "submitted": [],
+            "skipped": [],
+            "errors": [],
+        }
+
+        with (
+            patch.object(
+                kaggle_harvest,
+                "list_kernels",
+                return_value=[unscored, scored],
+            ),
+            patch.object(
+                kaggle_harvest,
+                "resolved_source_kernel",
+                return_value=(
+                    "example/scored/3",
+                    "competition-code-score",
+                    330_003_000,
+                ),
+            ) as resolve_mock,
+        ):
+            kaggle_harvest.process_auto_copy_code_submission(
+                self.competition,
+                state={
+                    "submissions": [],
+                    "pending_submissions": [],
+                    "failed_submissions": [],
+                    "rejected_sources": [],
+                },
+                output_dir=Path("submissions"),
+                work_dir=Path("work"),
+                submit=False,
+                now=kaggle_harvest.utc_now(),
+                report=report,
+            )
+
+        resolve_mock.assert_called_once_with(self.competition, scored)
+        self.assertIn(
+            "rank 1 has no Public Score: example/hot-but-unscored",
+            report["skipped"],
+        )
+        self.assertEqual(report["candidates"][0]["scan_rank"], 2)
 
     def test_competition_code_score_session_resolves_to_exact_version(self) -> None:
         row = {
@@ -1704,7 +1770,7 @@ class BestScoreVersionTests(unittest.TestCase):
             )
         )
 
-    def test_successful_exact_copy_and_its_duplicate_rejection_can_replay(
+    def test_successful_exact_copy_and_its_duplicate_rejection_are_blocked(
         self,
     ) -> None:
         successful_source = "example/successful/1"
@@ -1735,40 +1801,38 @@ class BestScoreVersionTests(unittest.TestCase):
             ],
         }
 
-        self.assertFalse(
+        self.assertTrue(
             kaggle_harvest.source_kernel_already_attempted(
                 state,
                 self.competition.slug,
                 successful_source,
                 execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
-                allow_successful_replay=True,
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             kaggle_harvest.source_kernel_already_attempted(
                 state,
                 self.competition.slug,
                 duplicate_source,
                 execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
-                allow_successful_replay=True,
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             kaggle_harvest.submission_hash_already_attempted(
                 state,
                 self.competition.slug,
                 file_hash.lower(),
                 execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
-                allow_successful_replay=True,
             )
         )
 
-    def test_ranked_scan_replays_successful_top_source_before_lower_score(
+    def test_ranked_scan_skips_successful_top_source_and_uses_next_hotness_row(
         self,
     ) -> None:
         top = "example/top-notebook"
         lower = "example/lower-notebook"
         top_source = f"{top}/3"
+        lower_source = f"{lower}/2"
         file_hash = "top-output-hash"
         state = {
             "schema_version": 1,
@@ -1777,7 +1841,6 @@ class BestScoreVersionTests(unittest.TestCase):
                     "competition": self.competition.slug,
                     "source_kernel_ref": top_source,
                     "sha256": file_hash,
-                    "execution_mode": kaggle_harvest.EXACT_SCORE_COPY_MODE,
                 }
             ],
             "pending_submissions": [],
@@ -1808,16 +1871,23 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "resolved_source_kernel",
-                    return_value=(
-                        top_source,
-                        "competition-code-score",
-                        330_003_000,
-                    ),
+                    side_effect=[
+                        (
+                            top_source,
+                            "competition-code-score",
+                            330_003_000,
+                        ),
+                        (
+                            lower_source,
+                            "competition-code-score",
+                            330_002_000,
+                        ),
+                    ],
                 ) as resolve_mock,
                 patch.object(
                     kaggle_harvest,
                     "copy_and_run_public_kernel",
-                    return_value=("example/top-clone", "2", top_source),
+                    return_value=("example/lower-clone", "2", lower_source),
                 ) as run_mock,
                 patch.object(kaggle_harvest, "wait_for_kernel_complete"),
                 patch.object(
@@ -1833,7 +1903,7 @@ class BestScoreVersionTests(unittest.TestCase):
                 patch.object(
                     kaggle_harvest,
                     "sha256_file",
-                    return_value=file_hash,
+                    return_value="lower-output-hash",
                 ),
                 patch.object(
                     kaggle_harvest,
@@ -1851,10 +1921,11 @@ class BestScoreVersionTests(unittest.TestCase):
                     report=report,
                 )
 
-        resolve_mock.assert_called_once_with(self.competition, {"ref": top})
+        self.assertEqual(resolve_mock.call_count, 2)
         run_mock.assert_called_once()
         submit_mock.assert_called_once()
-        self.assertEqual(report["submitted"][0]["source_kernel_ref"], top_source)
+        self.assertIn(f"already attempted source {top_source}", report["skipped"])
+        self.assertEqual(report["submitted"][0]["source_kernel_ref"], lower_source)
 
     def test_legacy_attempts_do_not_block_exact_score_copy_mode(self) -> None:
         source_ref = f"{SOURCE_KERNEL}/25"

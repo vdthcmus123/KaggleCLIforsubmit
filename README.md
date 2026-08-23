@@ -3,12 +3,15 @@
 Hệ thống này dùng GitHub Actions để tự động:
 
 1. Quét các notebook công khai của một hoặc nhiều cuộc thi Kaggle.
-2. Xếp notebook theo Public Score.
-3. Chọn notebook có điểm cao nhất mà tài khoản Kaggle có thể tái chạy.
+2. Với cuộc thi notebook-only, lấy danh sách **Hotness** mới nhất từ đầu ở mỗi
+   lần chạy.
+3. Duyệt từ trên xuống, lấy đúng version tạo ra Public Score của notebook đầu
+   tiên chưa từng được xử lý và tài khoản Kaggle có thể tái chạy.
 4. Chạy lại notebook trong tài khoản Kaggle của bạn.
 5. Kiểm tra file kết quả.
 6. Nộp bài và theo dõi trạng thái chấm điểm.
-7. Lưu lịch sử để tránh lặp lại các nguồn đã lỗi và không vượt quota đã cấu hình.
+7. Lưu lịch sử để không nộp lại cùng source version hoặc cùng output và không
+   vượt quota đã cấu hình.
 
 Hệ thống hỗ trợ cả cuộc thi cho phép tải file trực tiếp và cuộc thi bắt buộc
 nộp từ Kaggle Notebook.
@@ -114,26 +117,30 @@ Pipeline chi tiết:
 
 1. Gọi cùng dịch vụ `ListKernels` mà trang **Competition -> Code** của Kaggle
    sử dụng.
-2. Loại notebook được ghim và duyệt notebook thường theo Public Score từ cao
-   xuống thấp.
-3. Lấy `scriptVersionId` gắn với đúng Public Score đang hiển thị.
-4. Quy đổi thành nguồn bất biến dạng `owner/slug/version`; không tự ý dùng
+2. Yêu cầu Kaggle sắp xếp notebook thường theo **Hotness**, loại notebook được
+   ghim và các dòng chưa có Public Score, rồi giữ nguyên thứ tự trả về.
+3. Bắt đầu lại từ hạng Hotness đầu tiên ở mọi workflow; state chỉ dùng để bỏ
+   qua nguồn đã xử lý, không dùng để lưu hay tái sử dụng danh sách cũ.
+4. Lấy `scriptVersionId` gắn với Public Score tốt nhất của từng notebook.
+5. Quy đổi thành nguồn bất biến dạng `owner/slug/version`; không tự ý dùng
    version mới nhất nếu version đó không phải version tạo ra điểm đang xét.
-5. Kiểm tra notebook và toàn bộ input có thể truy cập hay không.
-6. Nếu nguồn dùng private dataset, input bị khóa hoặc không thể sao chép, ghi
+6. Kiểm tra state. Nếu đúng source version hoặc hash output đã từng thành công,
+   pending, scoring error hay bị loại, bỏ qua và xét dòng Hotness tiếp theo.
+7. Kiểm tra notebook và toàn bộ input có thể truy cập hay không.
+8. Nếu nguồn dùng private dataset, input bị khóa hoặc không thể sao chép, ghi
    nhận lý do rồi chuyển xuống notebook tiếp theo.
-7. Copy & Edit đúng source, input version, competition data, accelerator và
+9. Copy & Edit đúng source, input version, competition data, accelerator và
    thiết lập chạy sang một private notebook thuộc tài khoản của
    `KAGGLE_API_TOKEN`.
-8. Tạo alias runtime cho các kiểu đường dẫn input Kaggle khác nhau mà không
+10. Tạo alias runtime cho các kiểu đường dẫn input Kaggle khác nhau mà không
    thay đổi thuật toán của notebook.
-9. Push và chạy notebook đã copy trên Kaggle.
-10. Chờ notebook hoàn tất, tải output về và chọn file đúng
+11. Push và chạy notebook đã copy trên Kaggle.
+12. Chờ notebook hoàn tất, tải output về và chọn file đúng
     `submission_file_name` hoặc `file_pattern`.
-11. Kiểm tra tên file, header, dữ liệu rỗng và các quy tắc riêng đã cấu hình.
-12. Nộp **version notebook thuộc tài khoản của bạn** bằng Kaggle Code
+13. Kiểm tra tên file, header, dữ liệu rỗng và các quy tắc riêng đã cấu hình.
+14. Nộp **version notebook thuộc tài khoản của bạn** bằng Kaggle Code
     Submission API.
-13. Chờ Kaggle chấm điểm và lưu kết quả vào state.
+15. Chờ Kaggle chấm điểm và lưu kết quả vào state.
 
 Nếu notebook cao điểm nhất bị lỗi runtime, thiếu output, sai định dạng hoặc bị
 Kaggle scoring error, hệ thống ghi nguồn đó vào `rejected_sources` hoặc
@@ -145,14 +152,14 @@ Kaggle scoring error, hệ thống ghi nguồn đó vào `rejected_sources` ho�
 - Hết giới hạn nộp của lượt hoặc của ngày.
 - Không còn notebook phù hợp trong `top_n`.
 
-Vì vậy, tiêu chí thực tế là **notebook có Public Score cao nhất mà tài khoản có
-thể tái chạy và nộp hợp lệ**, không phải luôn luôn là hàng đầu tiên tuyệt đối.
+Vì vậy, tiêu chí thực tế là **dòng Hotness cao nhất có Public Score, chưa từng
+được xử lý và tài khoản có thể tái chạy hợp lệ**, không phải notebook có Public
+Score cao nhất toàn trang.
 
-Đối với chế độ copy đúng score version, một nguồn đã chấm điểm thành công vẫn
-được phép chạy lại ở các lịch sau. Output trùng hash với lần thành công trước
-không ép hệ thống chuyển xuống notebook thấp điểm hơn. Cách này giữ đúng yêu
-cầu luôn ưu tiên nguồn cao điểm nhất, nhưng mỗi lần nộp vẫn tiêu tốn quota
-Kaggle.
+Một `owner/slug/version` chỉ được thử một lần. Nguồn đã thành công, pending,
+scoring error hoặc bị loại đều không chạy lại ở lịch sau. Nếu cùng notebook có
+một version mới tạo điểm khác, version mới được coi là nguồn mới; hash output
+vẫn được kiểm tra để tránh nộp lại đúng nội dung cũ.
 
 ### Submission pending
 
@@ -262,7 +269,7 @@ competition độc lập và có thể ghi đè các giá trị mặc định.
 | `enabled` | Cho phép hệ thống xử lý competition |
 | `auto_submit` | Cho phép nộp thật khi workflow chạy với `--submit` |
 | `top_n` | Số notebook tối đa lấy từ Kaggle để xét |
-| `sort_by` | `scoreDescending` nếu điểm cao tốt hơn; `scoreAscending` nếu điểm thấp tốt hơn |
+| `sort_by` | `hotness` cho chế độ tự Copy & Edit; upload-file vẫn có thể dùng `scoreDescending` hoặc `scoreAscending` |
 | `language` | Lọc ngôn ngữ notebook, thường là `python` |
 | `kernel_type` | `notebook`, `script` hoặc `all` |
 | `output_type` | Bộ lọc output của Kaggle kernel list |
@@ -333,7 +340,7 @@ slug = "your-competition-slug"
 enabled = true
 auto_submit = false
 top_n = 100
-sort_by = "scoreDescending"
+sort_by = "hotness"
 language = "python"
 kernel_type = "notebook"
 output_type = "data"
@@ -433,7 +440,7 @@ Repository này đã có cấu hình cho:
 slug = "biohub-cell-tracking-during-development"
 code_competition = true
 auto_copy_notebook = true
-sort_by = "scoreDescending"
+sort_by = "hotness"
 submission_file_name = "submission.csv"
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 3
@@ -561,8 +568,9 @@ false, còn submission pending, đã hết quota hoặc không có notebook kh�
 
 ## Lưu ý vận hành
 
-- `scoreDescending` chỉ đúng khi metric càng cao càng tốt. Nếu metric càng
-  thấp càng tốt, dùng `scoreAscending`.
+- `hotness` áp dụng cho pipeline Copy & Edit notebook-only. Với pipeline tải
+  output trực tiếp, `scoreDescending` dùng khi metric càng cao càng tốt và
+  `scoreAscending` dùng khi metric càng thấp càng tốt.
 - `top_n` quá nhỏ có thể khiến hệ thống không tìm được nguồn khả dụng sau khi
   bỏ qua các notebook lỗi.
 - Không đặt `max_submissions_per_day` cao hơn giới hạn thực của Kaggle.

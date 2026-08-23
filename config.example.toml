@@ -50,3 +50,6 @@ code_competition = false
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 1
 max_submissions_per_day = 2
+
+# For a notebook-only competition with auto_copy_notebook = true, use
+# sort_by = "hotness" to scan Kaggle's Hotness list from the beginning.

@@ -1,6 +1,6 @@
 [defaults]
 top_n = 100
-sort_by = "scoreDescending"
+sort_by = "hotness"
 language = "python"
 kernel_type = "notebook"
 output_type = "data"
@@ -15,7 +15,7 @@ slug = "biohub-cell-tracking-during-development"
 enabled = true
 auto_submit = true
 top_n = 100
-sort_by = "scoreDescending"
+sort_by = "hotness"
 kernel_type = "notebook"
 file_pattern = "(?i).*submission.*\\.csv$"
 submission_file_name = "submission.csv"
