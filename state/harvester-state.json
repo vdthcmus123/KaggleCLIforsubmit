@@ -54,22 +54,7 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [
-    {
-      "competition": "biohub-cell-tracking-during-development",
-      "execution_mode": "competition-code-score-copy-v2",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
-      "kernel_version": "42",
-      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scoring_status": "pending",
-      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
-      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
-      "submission_ref": 55704027,
-      "submitted_at_utc": "2026-08-23T03:02:35.000352+00:00"
-    }
-  ],
+  "pending_submissions": [],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -217,6 +202,33 @@
       "rejected_at_utc": "2026-07-23T04:34:50.854326+00:00",
       "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
       "source_kernel_ref": "kaiwalyaatulraut/biohub-solution/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "rejected_at_utc": "2026-08-23T13:39:34.395042+00:00",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "sardorrazikov/biohub-fork-kaiwalya-solution/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "invalid integer z: 248490; first occurrence: CSV line 2: '23.841321448417926'; invalid integer y: 248490; first occurrence: CSV line 2: '62.41807600679898'; invalid integer x: 248490; first occurrence: CSV line 2: '109.64453271968398'",
+      "rejected_at_utc": "2026-08-23T14:02:44.135378+00:00",
+      "sha256": "e498c66afb80eb15a7aa3a99d5a063ed3b4b256a859856699c67e537d3d99a93",
+      "source_kernel_ref": "arnav170/biohub-swap3/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "invalid integer z: 287322; first occurrence: CSV line 2: '40.930418542702384'; invalid integer y: 287322; first occurrence: CSV line 2: '7.218660964632185'; invalid integer x: 287322; first occurrence: CSV line 2: '173.99114377439528'",
+      "rejected_at_utc": "2026-08-23T14:29:55.034877+00:00",
+      "sha256": "79e8464a9bec8c6ae742f6dfc61e50dea6d2f66c80021e78ad50c2ba101fd78e",
+      "source_kernel_ref": "sardorrazikov/biohub-fork-xiaolei-divaug/1"
     }
   ],
   "schema_version": 1,
@@ -955,6 +967,21 @@
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
       "submission_ref": 55692216,
       "submitted_at_utc": "2026-08-22T14:09:01.491229+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d5216a3fca",
+      "kernel_version": "42",
+      "message": "AUTO Biohub public kernel kaiwalyaatulraut/biohub-cell-tracking-solution/8 file submission.csv",
+      "public_score": "0.885",
+      "scored_at_utc": "2026-08-23T13:31:27.098690+00:00",
+      "scoring_status": "complete",
+      "sha256": "9659f89e672b81155d66b4c33414fe346712e03a96e6e20fcb33312b9169ab50",
+      "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
+      "submission_ref": 55704027,
+      "submitted_at_utc": "2026-08-23T03:02:35.000352+00:00"
     }
   ]
 }
