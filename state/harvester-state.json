@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-23b5c13699",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-4fb992e151",
       "kernel_version": "1",
-      "message": "AUTO Biohub public kernel sardorrazikov/biohub-fork-lb897-baseline/1 file submission.csv",
+      "message": "AUTO Biohub public kernel rockerritesh/0-926-biohub-divsub/1 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "284decb6c3618879e06647761187ff8d97a4df6240aa2afa503d69beaad262aa",
-      "source_kernel_ref": "sardorrazikov/biohub-fork-lb897-baseline/1",
-      "source_public_score": 0.889,
-      "submission_ref": 55730634,
-      "submitted_at_utc": "2026-08-24T03:06:08.189568+00:00"
+      "sha256": "5f4ec83d56b9fd0620473eed1e92a5a59932bf1c64e231111073ec008de2f7bc",
+      "source_kernel_ref": "rockerritesh/0-926-biohub-divsub/1",
+      "source_public_score": 0.926,
+      "submission_ref": 55745424,
+      "submitted_at_utc": "2026-08-24T14:54:47.239777+00:00"
     }
   ],
   "rejected_sources": [
@@ -999,6 +999,23 @@
       "source_kernel_ref": "kaiwalyaatulraut/biohub-cell-tracking-solution/8",
       "submission_ref": 55704027,
       "submitted_at_utc": "2026-08-23T03:02:35.000352+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-23b5c13699",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel sardorrazikov/biohub-fork-lb897-baseline/1 file submission.csv",
+      "public_score": "0.889",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-08-24T13:59:18.436235+00:00",
+      "scoring_status": "complete",
+      "sha256": "284decb6c3618879e06647761187ff8d97a4df6240aa2afa503d69beaad262aa",
+      "source_kernel_ref": "sardorrazikov/biohub-fork-lb897-baseline/1",
+      "source_public_score": 0.889,
+      "submission_ref": 55730634,
+      "submitted_at_utc": "2026-08-24T03:06:08.189568+00:00"
     }
   ]
 }
