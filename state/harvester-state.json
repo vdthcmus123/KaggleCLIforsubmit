@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-4fb992e151",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-fa7e4153f5",
       "kernel_version": "1",
-      "message": "AUTO Biohub public kernel rockerritesh/0-926-biohub-divsub/1 file submission.csv",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/7 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
+      "scan_rank": 2,
       "scoring_status": "pending",
-      "sha256": "5f4ec83d56b9fd0620473eed1e92a5a59932bf1c64e231111073ec008de2f7bc",
-      "source_kernel_ref": "rockerritesh/0-926-biohub-divsub/1",
-      "source_public_score": 0.926,
-      "submission_ref": 55745424,
-      "submitted_at_utc": "2026-08-24T14:54:47.239777+00:00"
+      "sha256": "fd77de2afe9747dc873d57f3c46488d60d885d977fb43a7f99fcf7bb308974a2",
+      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/7",
+      "source_public_score": 0.924,
+      "submission_ref": 55758718,
+      "submitted_at_utc": "2026-08-25T03:13:32.066176+00:00"
     }
   ],
   "rejected_sources": [
@@ -1016,6 +1016,23 @@
       "source_public_score": 0.889,
       "submission_ref": 55730634,
       "submitted_at_utc": "2026-08-24T03:06:08.189568+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-4fb992e151",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel rockerritesh/0-926-biohub-divsub/1 file submission.csv",
+      "public_score": "0.926",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-08-25T02:19:11.307676+00:00",
+      "scoring_status": "complete",
+      "sha256": "5f4ec83d56b9fd0620473eed1e92a5a59932bf1c64e231111073ec008de2f7bc",
+      "source_kernel_ref": "rockerritesh/0-926-biohub-divsub/1",
+      "source_public_score": 0.926,
+      "submission_ref": 55745424,
+      "submitted_at_utc": "2026-08-24T14:54:47.239777+00:00"
     }
   ]
 }
