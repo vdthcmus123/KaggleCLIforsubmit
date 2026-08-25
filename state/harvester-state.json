@@ -60,16 +60,16 @@
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-fa7e4153f5",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/7 file submission.csv",
+      "kernel_version": "2",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/12 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 2,
+      "scan_rank": 3,
       "scoring_status": "pending",
-      "sha256": "fd77de2afe9747dc873d57f3c46488d60d885d977fb43a7f99fcf7bb308974a2",
-      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/7",
-      "source_public_score": 0.924,
-      "submission_ref": 55758718,
-      "submitted_at_utc": "2026-08-25T03:13:32.066176+00:00"
+      "sha256": "2dbb8d024ab474ca1a8b52f3c636c398f97e79411ed804bdc096c352b00b4fa7",
+      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/12",
+      "source_public_score": 0.926,
+      "submission_ref": 55772214,
+      "submitted_at_utc": "2026-08-25T14:45:44.951279+00:00"
     }
   ],
   "rejected_sources": [
@@ -1033,6 +1033,23 @@
       "source_public_score": 0.926,
       "submission_ref": 55745424,
       "submitted_at_utc": "2026-08-24T14:54:47.239777+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-fa7e4153f5",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/7 file submission.csv",
+      "public_score": "0.924",
+      "scan_rank": 2,
+      "scored_at_utc": "2026-08-25T13:49:27.861360+00:00",
+      "scoring_status": "complete",
+      "sha256": "fd77de2afe9747dc873d57f3c46488d60d885d977fb43a7f99fcf7bb308974a2",
+      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/7",
+      "source_public_score": 0.924,
+      "submission_ref": 55758718,
+      "submitted_at_utc": "2026-08-25T03:13:32.066176+00:00"
     }
   ]
 }
