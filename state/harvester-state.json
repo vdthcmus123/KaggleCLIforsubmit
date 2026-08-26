@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v2",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-fa7e4153f5",
-      "kernel_version": "2",
-      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/12 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-1ad9cd7c02",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel arnav170/biohub-bi40/4 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 3,
+      "scan_rank": 5,
       "scoring_status": "pending",
-      "sha256": "2dbb8d024ab474ca1a8b52f3c636c398f97e79411ed804bdc096c352b00b4fa7",
-      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/12",
-      "source_public_score": 0.926,
-      "submission_ref": 55772214,
-      "submitted_at_utc": "2026-08-25T14:45:44.951279+00:00"
+      "sha256": "042183407ff779972c54fd7351344b681d7bd87001e00c8f3261f2e70394f4b9",
+      "source_kernel_ref": "arnav170/biohub-bi40/4",
+      "source_public_score": 0.923,
+      "submission_ref": 55784386,
+      "submitted_at_utc": "2026-08-26T03:56:16.763175+00:00"
     }
   ],
   "rejected_sources": [
@@ -246,6 +246,15 @@
       "rejected_at_utc": "2026-08-23T14:29:55.034877+00:00",
       "sha256": "79e8464a9bec8c6ae742f6dfc61e50dea6d2f66c80021e78ad50c2ba101fd78e",
       "source_kernel_ref": "sardorrazikov/biohub-fork-xiaolei-divaug/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 5f4ec83d56b9fd0620473eed1e92a5a59932bf1c64e231111073ec008de2f7bc",
+      "rejected_at_utc": "2026-08-26T02:51:49.853498+00:00",
+      "sha256": "5f4ec83d56b9fd0620473eed1e92a5a59932bf1c64e231111073ec008de2f7bc",
+      "source_kernel_ref": "andressantossanz/biohub-harness-0926-probe/2"
     }
   ],
   "schema_version": 1,
@@ -1050,6 +1059,23 @@
       "source_public_score": 0.924,
       "submission_ref": 55758718,
       "submitted_at_utc": "2026-08-25T03:13:32.066176+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-fa7e4153f5",
+      "kernel_version": "2",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-harmonic-fusion/12 file submission.csv",
+      "public_score": "0.926",
+      "scan_rank": 3,
+      "scored_at_utc": "2026-08-26T02:25:36.882088+00:00",
+      "scoring_status": "complete",
+      "sha256": "2dbb8d024ab474ca1a8b52f3c636c398f97e79411ed804bdc096c352b00b4fa7",
+      "source_kernel_ref": "flexonafft/biohub-harmonic-fusion/12",
+      "source_public_score": 0.926,
+      "submission_ref": 55772214,
+      "submitted_at_utc": "2026-08-25T14:45:44.951279+00:00"
     }
   ]
 }
