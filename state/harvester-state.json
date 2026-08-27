@@ -54,7 +54,24 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [],
+  "pending_submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-f353afc453",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel arnav170/biohub-sdw60/1 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scan_rank": 3,
+      "scoring_status": "pending",
+      "sha256": "1237f162efe3d6f535d2ab73dcc3e8bd03e623826bbb2e7fc2d3ec6286fb15c3",
+      "source_kernel_ref": "arnav170/biohub-sdw60/1",
+      "source_public_score": 0.927,
+      "submission_ref": 55817582,
+      "submitted_at_utc": "2026-08-27T12:26:53.698920+00:00"
+    }
+  ],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -256,6 +273,15 @@
       "rejected_at_utc": "2026-08-26T15:38:11.581064+00:00",
       "sha256": "2dbb8d024ab474ca1a8b52f3c636c398f97e79411ed804bdc096c352b00b4fa7",
       "source_kernel_ref": "ahmetyasreminolu/biohub-last-version/1"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v2",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 7f041747b707498377a525ed498c84212161615361b28d473620cf70acf1a3ba",
+      "rejected_at_utc": "2026-08-27T11:17:37.737755+00:00",
+      "sha256": "7f041747b707498377a525ed498c84212161615361b28d473620cf70acf1a3ba",
+      "source_kernel_ref": "ericwang03/biohub-daily-probe-lane-4/13"
     }
   ],
   "schema_version": 1,
