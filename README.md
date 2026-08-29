@@ -41,18 +41,17 @@ quét và báo notebook dự kiến chọn nhưng không nộp bài.
 Workflow tại `.github/workflows/kaggle-harvest.yml` được kích hoạt theo hai
 cách:
 
-- Tự động lúc **08:00** và **20:00** hằng ngày theo giờ Việt Nam.
+- Tự động lúc **08:00** hằng ngày theo giờ Việt Nam.
 - Thủ công bằng nút **Actions -> Kaggle public kernel harvest -> Run workflow**.
 
 GitHub Actions dùng UTC nên lịch tương ứng là:
 
 ```yaml
 - cron: "0 1 * * *"  # 08:00 Việt Nam
-- cron: "0 13 * * *" # 20:00 Việt Nam
 ```
 
-GitHub có thể bắt đầu workflow trễ vài phút khi hệ thống đông. Hai lượt của
-cùng workflow không chạy chồng lên nhau.
+GitHub có thể bắt đầu workflow trễ vài phút khi hệ thống đông. Các lượt kích
+hoạt của cùng workflow không chạy chồng lên nhau.
 
 ### 2. Chuẩn bị môi trường
 
@@ -429,7 +428,7 @@ Sau khi dry-run đúng:
 4. Kiểm tra cả GitHub Actions summary và tab Submissions trên Kaggle.
 5. Chỉ giữ `auto_submit = true` khi submission đầu tiên hợp lệ.
 
-Từ lượt kế tiếp, competition mới tự tham gia lịch 08:00 và 20:00. Không cần
+Từ lượt kế tiếp, competition mới tự tham gia lịch 08:00. Không cần
 tạo thêm workflow nếu tất cả competition dùng cùng lịch.
 
 ## Cấu hình Biohub hiện tại
