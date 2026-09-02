@@ -346,6 +346,60 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertEqual(metadata["machine_shape"], "NvidiaTeslaT4")
         self.assertTrue(metadata["docker_image"].endswith(digest))
 
+    def test_exact_score_copy_repairs_checkpoint_override_contradicted_by_guard(
+        self,
+    ) -> None:
+        notebook = json.dumps(
+            {
+                "cells": [
+                    {
+                        "cell_type": "code",
+                        "source": [
+                            'os.environ["BIOHUB_DEEPCENTER_CHECKPOINT"] = '
+                            '"/kaggle/input/deepcenter/weights/checkpoint_last.pt"\n'
+                        ],
+                    },
+                    {
+                        "cell_type": "code",
+                        "source": [
+                            '_deepcenter_expected_sha256 = "'
+                            + "a" * 64
+                            + '"  # best.pt, not checkpoint_last.pt\n'
+                        ],
+                    },
+                ],
+                "metadata": {},
+                "nbformat": 4,
+            }
+        ).encode("utf-8")
+
+        repaired, count = kaggle_harvest.reconcile_explicit_best_checkpoint_guard(
+            notebook,
+            is_notebook=True,
+        )
+
+        self.assertEqual(count, 1)
+        repaired_text = repaired.decode("utf-8")
+        self.assertIn("/kaggle/input/deepcenter/weights/best.pt", repaired_text)
+        self.assertNotIn(
+            "/kaggle/input/deepcenter/weights/checkpoint_last.pt",
+            repaired_text,
+        )
+
+    def test_checkpoint_override_is_untouched_without_explicit_guard(self) -> None:
+        source = (
+            'os.environ["MODEL_CHECKPOINT"] = '
+            '"/kaggle/input/model/checkpoint_last.pt"\n'
+        ).encode("utf-8")
+
+        repaired, count = kaggle_harvest.reconcile_explicit_best_checkpoint_guard(
+            source,
+            is_notebook=False,
+        )
+
+        self.assertEqual(count, 0)
+        self.assertEqual(repaired, source)
+
     def test_terminal_failure_is_remembered_and_next_candidate_submits(self) -> None:
         top = "boristown/dark-agi-biohub-cell-tracking-solution"
         second = "example/second-notebook"

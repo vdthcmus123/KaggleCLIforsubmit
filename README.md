@@ -131,15 +131,18 @@ Pipeline chi tiết:
 9. Copy & Edit đúng source, input version, competition data, accelerator và
    thiết lập chạy sang một private notebook thuộc tài khoản của
    `KAGGLE_API_TOKEN`.
-10. Tạo alias runtime cho các kiểu đường dẫn input Kaggle khác nhau mà không
-   thay đổi thuật toán của notebook.
-11. Push và chạy notebook đã copy trên Kaggle.
-12. Chờ notebook hoàn tất, tải output về và chọn file đúng
+10. Nếu notebook tự đặt `checkpoint_last.pt` nhưng đồng thời có integrity guard
+    ghi rõ checksum phải thuộc `best.pt` và không phải `checkpoint_last.pt`, sửa
+    override cũ về `best.pt` để khớp đúng phiên chạy đã tạo Public Score.
+11. Tạo alias runtime cho các kiểu đường dẫn input Kaggle khác nhau mà không
+    thay đổi thuật toán của notebook.
+12. Push và chạy notebook đã copy trên Kaggle.
+13. Chờ notebook hoàn tất, tải output về và chọn file đúng
     `submission_file_name` hoặc `file_pattern`.
-13. Kiểm tra tên file, header, dữ liệu rỗng và các quy tắc riêng đã cấu hình.
-14. Nộp **version notebook thuộc tài khoản của bạn** bằng Kaggle Code
+14. Kiểm tra tên file, header, dữ liệu rỗng và các quy tắc riêng đã cấu hình.
+15. Nộp **version notebook thuộc tài khoản của bạn** bằng Kaggle Code
     Submission API.
-15. Chờ Kaggle chấm điểm và lưu kết quả vào state.
+16. Chờ Kaggle chấm điểm và lưu kết quả vào state.
 
 Nếu notebook cao điểm nhất bị lỗi runtime, thiếu output, sai định dạng hoặc bị
 Kaggle scoring error, hệ thống ghi nguồn đó vào `rejected_sources` hoặc

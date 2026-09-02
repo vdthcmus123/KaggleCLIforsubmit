@@ -39,7 +39,7 @@ SCRIPT_VERSION_ID_RE = re.compile(
 COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
 # Bump when copy execution semantics change so a source broken by an older
 # harvester implementation can be retried without deleting its audit record.
-EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v2"
+EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v3"
 COMPETITION_CODE_SORTS = {
     "hotness": ("HOTNESS", "Hotness"),
     "scoreDescending": ("SCORE_DESCENDING", "Public-Score-descending"),
@@ -47,6 +47,16 @@ COMPETITION_CODE_SORTS = {
 KAGGLE_WEB_BASE = "https://www.kaggle.com"
 NO_ELIGIBLE_NOTEBOOK = "no new eligible notebook found"
 MOUNT_ALIAS_ROOT = "/tmp/kaggle-input-aliases"
+EXPECTED_BEST_CHECKPOINT_GUARD_RE = re.compile(
+    r"(?im)^[^\n]*expected_sha256\s*=\s*[\"'][0-9a-f]{64}[\"']"
+    r"[^\n]*best\.pt[^\n]*not\s+checkpoint_last\.pt"
+)
+CONFLICTING_CHECKPOINT_OVERRIDE_RE = re.compile(
+    r"(?P<prefix>os\.environ\[\s*[\"'][^\"']*CHECKPOINT[^\"']*[\"']"
+    r"\s*\]\s*=\s*[\"'])(?P<directory>[^\"']*)checkpoint_last\.pt"
+    r"(?P<suffix>[\"'])",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -2176,6 +2186,70 @@ def render_runtime_mount_bootstrap(specs: list[dict[str, Any]]) -> str:
     )
 
 
+def reconcile_explicit_best_checkpoint_guard(
+    source: bytes,
+    *,
+    is_notebook: bool,
+) -> tuple[bytes, int]:
+    """Repair a stale checkpoint override contradicted by an explicit hash guard."""
+
+    def repair(text: str, corpus: str) -> tuple[str, int]:
+        if not EXPECTED_BEST_CHECKPOINT_GUARD_RE.search(corpus):
+            return text, 0
+
+        def replace(match: re.Match[str]) -> str:
+            return (
+                f"{match.group('prefix')}{match.group('directory')}best.pt"
+                f"{match.group('suffix')}"
+            )
+
+        return CONFLICTING_CHECKPOINT_OVERRIDE_RE.subn(replace, text)
+
+    if not is_notebook:
+        try:
+            text = source.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ExactSourceUnavailableError(
+                "Kaggle returned invalid UTF-8 source."
+            ) from exc
+        repaired, count = repair(text, text)
+        return repaired.encode("utf-8"), count
+
+    try:
+        notebook = json.loads(source.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ExactSourceUnavailableError(
+            "Kaggle returned invalid notebook JSON."
+        ) from exc
+
+    code_cells: list[tuple[dict[str, Any], str, bool]] = []
+    for cell in notebook.get("cells", []):
+        if not isinstance(cell, dict) or cell.get("cell_type") != "code":
+            continue
+        cell_source = cell.get("source", "")
+        source_is_list = isinstance(cell_source, list)
+        if source_is_list:
+            text = "".join(str(part) for part in cell_source)
+        elif isinstance(cell_source, str):
+            text = cell_source
+        else:
+            continue
+        code_cells.append((cell, text, source_is_list))
+
+    corpus = "\n".join(text for _cell, text, _source_is_list in code_cells)
+    repair_count = 0
+    for cell, text, source_is_list in code_cells:
+        repaired, count = repair(text, corpus)
+        if not count:
+            continue
+        cell["source"] = (
+            repaired.splitlines(keepends=True) if source_is_list else repaired
+        )
+        repair_count += count
+
+    return json.dumps(notebook).encode("utf-8"), repair_count
+
+
 def insert_script_bootstrap(source: str, bootstrap: str) -> str:
     try:
         tree = ast.parse(source)
@@ -2370,6 +2444,16 @@ def download_exact_public_kernel_source(
             f"Kaggle returned invalid input metadata for {source_ref}."
         )
     sources = metadata_sources_from_session(raw_data_sources)
+    source, repaired_checkpoints = reconcile_explicit_best_checkpoint_guard(
+        source,
+        is_notebook=is_notebook,
+    )
+    if repaired_checkpoints:
+        print(
+            "Reconciled a stale checkpoint override with the notebook's "
+            "explicit best.pt integrity guard "
+            f"({repaired_checkpoints} occurrence(s))."
+        )
     source, adjusted_mounts = adapt_source_runtime_mounts(
         source,
         is_notebook=is_notebook,
