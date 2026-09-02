@@ -2036,6 +2036,65 @@ class BestScoreVersionTests(unittest.TestCase):
             )
         )
 
+    def test_v2_submission_remains_blocked_after_v3_repair(self) -> None:
+        source_ref = "example/already-submitted/7"
+        file_hash = "v2-success-hash"
+        state = {
+            "submissions": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": source_ref,
+                    "sha256": file_hash,
+                    "execution_mode": "competition-code-score-copy-v2",
+                }
+            ],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [],
+        }
+
+        self.assertTrue(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                source_ref,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+            )
+        )
+        self.assertTrue(
+            kaggle_harvest.submission_hash_already_attempted(
+                state,
+                self.competition.slug,
+                file_hash,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+            )
+        )
+
+    def test_v2_runtime_rejection_can_retry_after_v3_repair(self) -> None:
+        source_ref = "example/runtime-failed/4"
+        state = {
+            "submissions": [],
+            "pending_submissions": [],
+            "failed_submissions": [],
+            "rejected_sources": [
+                {
+                    "competition": self.competition.slug,
+                    "source_kernel_ref": source_ref,
+                    "execution_mode": "competition-code-score-copy-v2",
+                    "reason": "old clone runtime failure",
+                }
+            ],
+        }
+
+        self.assertFalse(
+            kaggle_harvest.source_kernel_already_attempted(
+                state,
+                self.competition.slug,
+                source_ref,
+                execution_mode=kaggle_harvest.EXACT_SCORE_COPY_MODE,
+            )
+        )
+
     def test_harvester_does_not_clone_a_failed_source_version_again(self) -> None:
         source_ref = f"{SOURCE_KERNEL}/25"
         state = {

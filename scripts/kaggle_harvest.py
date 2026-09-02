@@ -40,6 +40,9 @@ COMPETITION_ID_RE = re.compile(r"/Competitions/(\d+)", re.IGNORECASE)
 # Bump when copy execution semantics change so a source broken by an older
 # harvester implementation can be retried without deleting its audit record.
 EXACT_SCORE_COPY_MODE = "competition-code-score-copy-v3"
+STABLE_EXACT_SCORE_COPY_MODE_RE = re.compile(
+    r"^competition-code-score-copy-v(?:[2-9]|[1-9][0-9]+)$"
+)
 COMPETITION_CODE_SORTS = {
     "hotness": ("HOTNESS", "Hotness"),
     "scoreDescending": ("SCORE_DESCENDING", "Public-Score-descending"),
@@ -1130,18 +1133,36 @@ def attempted_state_records(
     *,
     execution_mode: str | None,
 ) -> list[dict[str, Any]]:
-    attempts = [
+    durable_attempts = [
         *state.get("submissions", []),
         *state.get("pending_submissions", []),
         *state.get("failed_submissions", []),
-        *state.get("rejected_sources", []),
     ]
-    return [
+    rejected_attempts = state.get("rejected_sources", [])
+
+    def durable_mode_matches(item: dict[str, Any]) -> bool:
+        if execution_mode_matches(item, execution_mode):
+            return True
+        item_mode = str(item.get("execution_mode") or "")
+        requested_mode = str(execution_mode or "")
+        return bool(
+            STABLE_EXACT_SCORE_COPY_MODE_RE.fullmatch(item_mode)
+            and STABLE_EXACT_SCORE_COPY_MODE_RE.fullmatch(requested_mode)
+        )
+
+    durable = [
         item
-        for item in attempts
+        for item in durable_attempts
+        if item.get("competition") == competition
+        and durable_mode_matches(item)
+    ]
+    rejected = [
+        item
+        for item in rejected_attempts
         if item.get("competition") == competition
         and execution_mode_matches(item, execution_mode)
     ]
+    return durable + rejected
 
 
 def source_kernel_already_attempted(
