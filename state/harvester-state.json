@@ -54,7 +54,24 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [],
+  "pending_submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-826dca2b5c",
+      "kernel_version": "3",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-agreement-gated-dual-seed-fusion/11 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scan_rank": 1,
+      "scoring_status": "pending",
+      "sha256": "5b4d8501d8fa27cd1f12c0462e5ffbb884526077d86f724f562876d5f9834eaf",
+      "source_kernel_ref": "flexonafft/biohub-agreement-gated-dual-seed-fusion/11",
+      "source_public_score": 0.935,
+      "submission_ref": 55966988,
+      "submitted_at_utc": "2026-09-02T19:35:46.986431+00:00"
+    }
+  ],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
