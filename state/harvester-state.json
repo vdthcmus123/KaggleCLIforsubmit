@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-826dca2b5c",
-      "kernel_version": "5",
-      "message": "AUTO Biohub public kernel flexonafft/biohub-agreement-gated-dual-seed-fusion/18 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-5b82ae4845",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel amanatar/biohub-cell-tracking-v/20 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 2,
+      "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "30fc47ffd3e0fd06c1b7635146da627c6535c92d9b3af1bc3c28a18f07157b98",
-      "source_kernel_ref": "flexonafft/biohub-agreement-gated-dual-seed-fusion/18",
-      "source_public_score": 0.94,
-      "submission_ref": 56026762,
-      "submitted_at_utc": "2026-09-05T07:13:24.157860+00:00"
+      "sha256": "14ab1da6043d8859b2632cdffceaf884bf2e8b137306eb3967370ec0cf37823d",
+      "source_kernel_ref": "amanatar/biohub-cell-tracking-v/20",
+      "source_public_score": 0.941,
+      "submission_ref": 56048476,
+      "submitted_at_utc": "2026-09-06T06:50:19.849029+00:00"
     }
   ],
   "rejected_sources": [
@@ -1298,6 +1298,23 @@
       "source_public_score": 0.936,
       "submission_ref": 56006698,
       "submitted_at_utc": "2026-09-04T06:46:35.222584+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-826dca2b5c",
+      "kernel_version": "5",
+      "message": "AUTO Biohub public kernel flexonafft/biohub-agreement-gated-dual-seed-fusion/18 file submission.csv",
+      "public_score": "0.939",
+      "scan_rank": 2,
+      "scored_at_utc": "2026-09-06T05:40:47.221988+00:00",
+      "scoring_status": "complete",
+      "sha256": "30fc47ffd3e0fd06c1b7635146da627c6535c92d9b3af1bc3c28a18f07157b98",
+      "source_kernel_ref": "flexonafft/biohub-agreement-gated-dual-seed-fusion/18",
+      "source_public_score": 0.94,
+      "submission_ref": 56026762,
+      "submitted_at_utc": "2026-09-05T07:13:24.157860+00:00"
     }
   ]
 }
