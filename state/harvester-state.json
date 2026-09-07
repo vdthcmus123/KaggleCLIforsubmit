@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-5b82ae4845",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-deb5ec5c09",
       "kernel_version": "1",
-      "message": "AUTO Biohub public kernel amanatar/biohub-cell-tracking-v/20 file submission.csv",
+      "message": "AUTO Biohub public kernel rogerrogerroger3r/biohub-run77/2 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "14ab1da6043d8859b2632cdffceaf884bf2e8b137306eb3967370ec0cf37823d",
-      "source_kernel_ref": "amanatar/biohub-cell-tracking-v/20",
-      "source_public_score": 0.941,
-      "submission_ref": 56048476,
-      "submitted_at_utc": "2026-09-06T06:50:19.849029+00:00"
+      "sha256": "052ebbb0c2f582f9bcb94fd914e994a6afa255acaa1ccef422df9c7b025656fe",
+      "source_kernel_ref": "rogerrogerroger3r/biohub-run77/2",
+      "source_public_score": 0.942,
+      "submission_ref": 56070581,
+      "submitted_at_utc": "2026-09-07T06:54:24.096554+00:00"
     }
   ],
   "rejected_sources": [
@@ -1315,6 +1315,23 @@
       "source_public_score": 0.94,
       "submission_ref": 56026762,
       "submitted_at_utc": "2026-09-05T07:13:24.157860+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-5b82ae4845",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel amanatar/biohub-cell-tracking-v/20 file submission.csv",
+      "public_score": "0.941",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-09-07T05:50:55.263026+00:00",
+      "scoring_status": "complete",
+      "sha256": "14ab1da6043d8859b2632cdffceaf884bf2e8b137306eb3967370ec0cf37823d",
+      "source_kernel_ref": "amanatar/biohub-cell-tracking-v/20",
+      "source_public_score": 0.941,
+      "submission_ref": 56048476,
+      "submitted_at_utc": "2026-09-06T06:50:19.849029+00:00"
     }
   ]
 }
