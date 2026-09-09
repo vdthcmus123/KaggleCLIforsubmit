@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-1f5ba0eed7",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-4f2234b052",
       "kernel_version": "1",
-      "message": "AUTO Biohub public kernel busyaprime/biohub-0-942-lb-one-knob-past-the-public-line/3 file submission.csv",
+      "message": "AUTO Biohub public kernel rogerrogerroger3r/biohub-run84/1 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
+      "scan_rank": 4,
       "scoring_status": "pending",
-      "sha256": "8218ae3fbc7ce2d41f2568bae45256c531ce6e87aa9e1707495f3093fa9c41b9",
-      "source_kernel_ref": "busyaprime/biohub-0-942-lb-one-knob-past-the-public-line/3",
-      "source_public_score": 0.942,
-      "submission_ref": 56092432,
-      "submitted_at_utc": "2026-09-08T06:55:08.474686+00:00"
+      "sha256": "14f4eccc1e4203836f40444fb6352d1bbedfd6670cd6150d5055f7ff9f43b5b1",
+      "source_kernel_ref": "rogerrogerroger3r/biohub-run84/1",
+      "source_public_score": 0.945,
+      "submission_ref": 56116612,
+      "submitted_at_utc": "2026-09-09T07:43:19.143722+00:00"
     }
   ],
   "rejected_sources": [
@@ -1349,6 +1349,23 @@
       "source_public_score": 0.942,
       "submission_ref": 56070581,
       "submitted_at_utc": "2026-09-07T06:54:24.096554+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-1f5ba0eed7",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel busyaprime/biohub-0-942-lb-one-knob-past-the-public-line/3 file submission.csv",
+      "public_score": "0.942",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-09-09T05:48:30.557841+00:00",
+      "scoring_status": "complete",
+      "sha256": "8218ae3fbc7ce2d41f2568bae45256c531ce6e87aa9e1707495f3093fa9c41b9",
+      "source_kernel_ref": "busyaprime/biohub-0-942-lb-one-knob-past-the-public-line/3",
+      "source_public_score": 0.942,
+      "submission_ref": 56092432,
+      "submitted_at_utc": "2026-09-08T06:55:08.474686+00:00"
     }
   ]
 }
