@@ -54,7 +54,24 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [],
+  "pending_submissions": [
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6a632e4aad",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel pawanmali/biohub-942proxy-fork-v1/1 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scan_rank": 1,
+      "scoring_status": "pending",
+      "sha256": "5b390b77f3d759e7b35ce4ef52a018151e9496d7e03d651ff061e1f3bd7308d2",
+      "source_kernel_ref": "pawanmali/biohub-942proxy-fork-v1/1",
+      "source_public_score": 0.945,
+      "submission_ref": 56200870,
+      "submitted_at_utc": "2026-09-13T06:55:02.599640+00:00"
+    }
+  ],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
