@@ -54,24 +54,7 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [
-    {
-      "competition": "biohub-cell-tracking-during-development",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6a632e4aad",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel pawanmali/biohub-942proxy-fork-v1/1 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
-      "scoring_status": "pending",
-      "sha256": "5b390b77f3d759e7b35ce4ef52a018151e9496d7e03d651ff061e1f3bd7308d2",
-      "source_kernel_ref": "pawanmali/biohub-942proxy-fork-v1/1",
-      "source_public_score": 0.945,
-      "submission_ref": 56200870,
-      "submitted_at_utc": "2026-09-13T06:55:02.599640+00:00"
-    }
-  ],
+  "pending_submissions": [],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -333,6 +316,13 @@
       "rejected_at_utc": "2026-09-10T06:24:05.676026+00:00",
       "sha256": "8218ae3fbc7ce2d41f2568bae45256c531ce6e87aa9e1707495f3093fa9c41b9",
       "source_kernel_ref": "busyaprime/biohub-0-942-lb-one-knob-past-the-public-line/4"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "reason": "Kaggle rejected pinned kernel inputs: dataset:beraterolelk/kaggle-grandmaster-winning-solutions-2015-2026)/4",
+      "rejected_at_utc": "2026-09-14T05:56:31.715294+00:00",
+      "source_kernel_ref": "beraterolelk/biohub-cell-tracking-4d-spatiotemporal-baseline/12"
     }
   ],
   "schema_version": 1,
@@ -1409,6 +1399,23 @@
       "source_public_score": 0.178,
       "submission_ref": 56138848,
       "submitted_at_utc": "2026-09-10T06:56:22.016072+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-6a632e4aad",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel pawanmali/biohub-942proxy-fork-v1/1 file submission.csv",
+      "public_score": "0.945",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-09-14T05:56:26.472324+00:00",
+      "scoring_status": "complete",
+      "sha256": "5b390b77f3d759e7b35ce4ef52a018151e9496d7e03d651ff061e1f3bd7308d2",
+      "source_kernel_ref": "pawanmali/biohub-942proxy-fork-v1/1",
+      "source_public_score": 0.945,
+      "submission_ref": 56200870,
+      "submitted_at_utc": "2026-09-13T06:55:02.599640+00:00"
     }
   ]
 }
