@@ -54,24 +54,7 @@
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
     }
   ],
-  "pending_submissions": [
-    {
-      "competition": "biohub-cell-tracking-during-development",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-5f2f0766d6",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel karl0106/biohub-p26-0947-fast-repro/1 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 4,
-      "scoring_status": "pending",
-      "sha256": "d34533806b3153ddd4f33f3bbc1dea70af2d5406bb1ea48e42c135a97c213f60",
-      "source_kernel_ref": "karl0106/biohub-p26-0947-fast-repro/1",
-      "source_public_score": 0.946,
-      "submission_ref": 56248710,
-      "submitted_at_utc": "2026-09-15T07:53:14.567530+00:00"
-    }
-  ],
+  "pending_submissions": [],
   "rejected_sources": [
     {
       "competition": "biohub-cell-tracking-during-development",
@@ -1433,6 +1416,23 @@
       "source_public_score": 0.945,
       "submission_ref": 56200870,
       "submitted_at_utc": "2026-09-13T06:55:02.599640+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-5f2f0766d6",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel karl0106/biohub-p26-0947-fast-repro/1 file submission.csv",
+      "public_score": "0.946",
+      "scan_rank": 4,
+      "scored_at_utc": "2026-09-16T05:46:44.183990+00:00",
+      "scoring_status": "complete",
+      "sha256": "d34533806b3153ddd4f33f3bbc1dea70af2d5406bb1ea48e42c135a97c213f60",
+      "source_kernel_ref": "karl0106/biohub-p26-0947-fast-repro/1",
+      "source_public_score": 0.946,
+      "submission_ref": 56248710,
+      "submitted_at_utc": "2026-09-15T07:53:14.567530+00:00"
     }
   ]
 }
