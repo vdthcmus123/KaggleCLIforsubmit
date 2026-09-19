@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-21f5f3af04",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d473261f9c",
       "kernel_version": "1",
-      "message": "AUTO Biohub public kernel haideptry/biohub-sota-0-948-density-adaptive-2xt4-22m/1 file submission.csv",
+      "message": "AUTO Biohub public kernel thtennant/biohub-frontier947-gapfill-det096-v1/1 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 3,
+      "scan_rank": 5,
       "scoring_status": "pending",
-      "sha256": "6069891831e1f9d57bd63691e3b0dc6ab1951a7906c83601ec3c1b3532970309",
-      "source_kernel_ref": "haideptry/biohub-sota-0-948-density-adaptive-2xt4-22m/1",
-      "source_public_score": 0.945,
-      "submission_ref": 56323379,
-      "submitted_at_utc": "2026-09-18T07:19:06.394709+00:00"
+      "sha256": "360c85081079b4a34ba4529fe601f0b77df96f52e35e700a89a156c1e7a1aa8d",
+      "source_kernel_ref": "thtennant/biohub-frontier947-gapfill-det096-v1/1",
+      "source_public_score": 0.947,
+      "submission_ref": 56350618,
+      "submitted_at_utc": "2026-09-19T06:52:08.958361+00:00"
     }
   ],
   "rejected_sources": [
@@ -340,6 +340,15 @@
       "reason": "Kaggle rejected pinned kernel inputs: dataset:beraterolelk/kaggle-grandmaster-winning-solutions-2015-2026)/4",
       "rejected_at_utc": "2026-09-14T05:56:31.715294+00:00",
       "source_kernel_ref": "beraterolelk/biohub-cell-tracking-4d-spatiotemporal-baseline/12"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "reason": "invalid integer z: 242287; first occurrence: CSV line 2: '0.0'; invalid integer y: 242287; first occurrence: CSV line 2: '10.0'; invalid integer x: 242287; first occurrence: CSV line 2: '52.0'",
+      "rejected_at_utc": "2026-09-19T06:06:45.183910+00:00",
+      "sha256": "d0b0cbc2916b07440b85b4de90a7ea35a0408fbe98f46f2a0aa79b6ec5c47f58",
+      "source_kernel_ref": "alfonso1799/biohub-top-3-push-v50-streamlined-sota/2"
     }
   ],
   "schema_version": 1,
@@ -1467,6 +1476,23 @@
       "source_public_score": 0.946,
       "submission_ref": 56297094,
       "submitted_at_utc": "2026-09-17T06:56:08.578218+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-21f5f3af04",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel haideptry/biohub-sota-0-948-density-adaptive-2xt4-22m/1 file submission.csv",
+      "public_score": "0.945",
+      "scan_rank": 3,
+      "scored_at_utc": "2026-09-19T05:34:28.950674+00:00",
+      "scoring_status": "complete",
+      "sha256": "6069891831e1f9d57bd63691e3b0dc6ab1951a7906c83601ec3c1b3532970309",
+      "source_kernel_ref": "haideptry/biohub-sota-0-948-density-adaptive-2xt4-22m/1",
+      "source_public_score": 0.945,
+      "submission_ref": 56323379,
+      "submitted_at_utc": "2026-09-18T07:19:06.394709+00:00"
     }
   ]
 }
