@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d473261f9c",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel thtennant/biohub-frontier947-gapfill-det096-v1/1 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-931d05ca03",
+      "kernel_version": "2",
+      "message": "AUTO Biohub public kernel newwang12/biohub-v1-grouped/17 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 5,
+      "scan_rank": 4,
       "scoring_status": "pending",
-      "sha256": "360c85081079b4a34ba4529fe601f0b77df96f52e35e700a89a156c1e7a1aa8d",
-      "source_kernel_ref": "thtennant/biohub-frontier947-gapfill-det096-v1/1",
-      "source_public_score": 0.947,
-      "submission_ref": 56350618,
-      "submitted_at_utc": "2026-09-19T06:52:08.958361+00:00"
+      "sha256": "5e9e83b50828733f75bbf968fdcae2454cf635ef1904f8e572189baeb5163b0f",
+      "source_kernel_ref": "newwang12/biohub-v1-grouped/17",
+      "source_public_score": 0.946,
+      "submission_ref": 56384417,
+      "submitted_at_utc": "2026-09-20T07:37:58.315496+00:00"
     }
   ],
   "rejected_sources": [
@@ -1493,6 +1493,23 @@
       "source_public_score": 0.945,
       "submission_ref": 56323379,
       "submitted_at_utc": "2026-09-18T07:19:06.394709+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-d473261f9c",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel thtennant/biohub-frontier947-gapfill-det096-v1/1 file submission.csv",
+      "public_score": "0.947",
+      "scan_rank": 5,
+      "scored_at_utc": "2026-09-20T05:53:21.933571+00:00",
+      "scoring_status": "complete",
+      "sha256": "360c85081079b4a34ba4529fe601f0b77df96f52e35e700a89a156c1e7a1aa8d",
+      "source_kernel_ref": "thtennant/biohub-frontier947-gapfill-det096-v1/1",
+      "source_public_score": 0.947,
+      "submission_ref": 56350618,
+      "submitted_at_utc": "2026-09-19T06:52:08.958361+00:00"
     }
   ]
 }
