@@ -60,16 +60,16 @@
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
       "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-931d05ca03",
-      "kernel_version": "2",
-      "message": "AUTO Biohub public kernel newwang12/biohub-v1-grouped/17 file submission.csv",
+      "kernel_version": "3",
+      "message": "AUTO Biohub public kernel newwang12/biohub-v1-grouped/19 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 4,
+      "scan_rank": 3,
       "scoring_status": "pending",
-      "sha256": "5e9e83b50828733f75bbf968fdcae2454cf635ef1904f8e572189baeb5163b0f",
-      "source_kernel_ref": "newwang12/biohub-v1-grouped/17",
+      "sha256": "d7e55ec5604874d166dfdf366b0654188b7c9ac8c2e7b22548e4d0c19eb43589",
+      "source_kernel_ref": "newwang12/biohub-v1-grouped/19",
       "source_public_score": 0.946,
-      "submission_ref": 56384417,
-      "submitted_at_utc": "2026-09-20T07:37:58.315496+00:00"
+      "submission_ref": 56420901,
+      "submitted_at_utc": "2026-09-21T07:55:05.193505+00:00"
     }
   ],
   "rejected_sources": [
@@ -1510,6 +1510,23 @@
       "source_public_score": 0.947,
       "submission_ref": 56350618,
       "submitted_at_utc": "2026-09-19T06:52:08.958361+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-931d05ca03",
+      "kernel_version": "2",
+      "message": "AUTO Biohub public kernel newwang12/biohub-v1-grouped/17 file submission.csv",
+      "public_score": "0.944",
+      "scan_rank": 4,
+      "scored_at_utc": "2026-09-21T06:00:16.195994+00:00",
+      "scoring_status": "complete",
+      "sha256": "5e9e83b50828733f75bbf968fdcae2454cf635ef1904f8e572189baeb5163b0f",
+      "source_kernel_ref": "newwang12/biohub-v1-grouped/17",
+      "source_public_score": 0.946,
+      "submission_ref": 56384417,
+      "submitted_at_utc": "2026-09-20T07:37:58.315496+00:00"
     }
   ]
 }
