@@ -8,10 +8,10 @@ file_pattern = "(?i).*submission.*\\.csv$"
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
-message_template = "AUTO Biohub public kernel {kernel_ref} file {file_name}"
+message_template = "AUTO RSNA public kernel {kernel_ref} file {file_name}"
 
 [[competitions]]
-slug = "biohub-cell-tracking-during-development"
+slug = "rsna-knee-abnormality-detection"
 enabled = true
 auto_submit = true
 top_n = 100
@@ -30,23 +30,19 @@ require_public_score = true
 source_kernel_versions = {}
 dataset_source_versions = {}
 required_columns = [
-  "id",
-  "dataset",
-  "row_type",
-  "node_id",
-  "t",
-  "z",
-  "y",
-  "x",
-  "source_id",
-  "target_id",
+  "StudyInstanceUID",
+  "ACLt",
+  "MCL",
+  "Medial Meniscus",
+  "Lateral Meniscus",
+  "Medial OA",
+  "Lateral OA",
+  "PF OA",
+  "Effusion",
+  "Synovitis",
+  "Baker's,Contusion",
+  "Fracture"
 ]
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
-
-[competitions.dataset_shapes]
-"44b6_0113de3b" = [100, 64, 256, 256]
-"44b6_0b24845f" = [100, 64, 256, 256]
-"6bba_05b6850b" = [100, 64, 256, 256]
-"6bba_05db0fb1" = [100, 64, 256, 256]
