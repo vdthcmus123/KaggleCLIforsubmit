@@ -59,17 +59,17 @@
       "competition": "biohub-cell-tracking-during-development",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-0d384d3e1f",
-      "kernel_version": "1",
-      "message": "AUTO Biohub public kernel tom99763/14th-place-solution/2 file submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-931d05ca03",
+      "kernel_version": "5",
+      "message": "AUTO Biohub public kernel newwang12/biohub-v1-grouped/26 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 8,
+      "scan_rank": 5,
       "scoring_status": "pending",
-      "sha256": "2486e45831b9479904fee24fd966e1080e05c7153d4afeda69b477e0133a9573",
-      "source_kernel_ref": "tom99763/14th-place-solution/2",
-      "source_public_score": 0.965,
-      "submission_ref": 56746556,
-      "submitted_at_utc": "2026-10-01T08:11:35.171945+00:00"
+      "sha256": "c26807a1dfc4f693241b2104f4b9037a502844fd3ddbecd34d7bb22bf9e86e6d",
+      "source_kernel_ref": "newwang12/biohub-v1-grouped/26",
+      "source_public_score": 0.946,
+      "submission_ref": 56768601,
+      "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
     }
   ],
   "rejected_sources": [
@@ -1568,6 +1568,23 @@
       "source_public_score": 0.946,
       "submission_ref": 56455787,
       "submitted_at_utc": "2026-09-22T06:59:45.223487+00:00"
+    },
+    {
+      "competition": "biohub-cell-tracking-during-development",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-biohub-cell-tracking-during-develo-0d384d3e1f",
+      "kernel_version": "1",
+      "message": "AUTO Biohub public kernel tom99763/14th-place-solution/2 file submission.csv",
+      "public_score": "0.96556",
+      "scan_rank": 8,
+      "scored_at_utc": "2026-10-02T06:49:25.447686+00:00",
+      "scoring_status": "complete",
+      "sha256": "2486e45831b9479904fee24fd966e1080e05c7153d4afeda69b477e0133a9573",
+      "source_kernel_ref": "tom99763/14th-place-solution/2",
+      "source_public_score": 0.965,
+      "submission_ref": 56746556,
+      "submitted_at_utc": "2026-10-01T08:11:35.171945+00:00"
     }
   ]
 }
