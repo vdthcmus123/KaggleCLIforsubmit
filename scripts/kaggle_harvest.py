@@ -1895,24 +1895,39 @@ def nested_dict(value: Any, *keys: str) -> dict[str, Any]:
 
 
 def resource_ref_from_path(value: Any, resource: str, parts: int) -> str | None:
+    """Resolve input identity fields, never URLs from descriptions or file text."""
     if isinstance(value, dict):
-        for item in value.values():
-            found = resource_ref_from_path(item, resource, parts)
+        identity_keys = (
+            "sourceUrl", "mountSlug", "slug", "relativeUrl",
+            "competitionSlug", "datasetSlug", "kernelSlug", "modelInstanceSlug",
+        )
+        for key in identity_keys:
+            candidate = value.get(key)
+            if not isinstance(candidate, str):
+                continue
+            if resource == "competitions" and key == "slug":
+                if re.fullmatch(r"[A-Za-z0-9_-]+", candidate):
+                    return candidate
+            found = resource_ref_from_path(candidate, resource, parts)
             if found:
                 return found
-        return None
-    if isinstance(value, list):
-        for item in value:
-            found = resource_ref_from_path(item, resource, parts)
-            if found:
-                return found
+        for key in (
+            "databundle", "databundleVersion", "competitionInfo", "datasetInfo",
+            "kernelInfo", "modelInfo", "modelInstanceInfo",
+        ):
+            nested = value.get(key)
+            if isinstance(nested, dict):
+                found = resource_ref_from_path(nested, resource, parts)
+                if found:
+                    return found
         return None
     if not isinstance(value, str):
         return None
+    path = "/" + value.lstrip("/")
     pattern = rf"/{re.escape(resource)}/" + "/".join(
-        r"([^/\s?#]+)" for _ in range(parts)
-    )
-    match = re.search(pattern, value)
+        r"([A-Za-z0-9_.-]+)" for _ in range(parts)
+    ) + r"(?=/|[?#]|$)"
+    match = re.search(pattern, path)
     return "/".join(match.groups()) if match else None
 
 
@@ -2860,6 +2875,7 @@ def process_auto_copy_code_submission(
             )
         except ExactSourceUnavailableError as exc:
             reason = error_text(exc)
+            print(f"Rejected source {source_ref}: {reason}")
             rejected = remember_rejected_source(
                 state,
                 comp=comp,

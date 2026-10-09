@@ -13,7 +13,7 @@ Tự quét public notebook, chạy lại trong tài khoản Kaggle của bạn v
 5. Duyệt từ trên xuống. Với `require_public_score = true`, bỏ notebook chưa có Public Score.
 6. Xác định đúng version/session gắn với Public Score, không tự chuyển sang version mới nhất khi không lấy được source chính xác.
 7. Bỏ source version đã nộp, đang chấm hoặc đã có lỗi cuối cùng được ghi trong lịch sử. Version mới của cùng notebook vẫn có thể được chọn.
-8. Copy source đầy đủ và các phiên bản input sang notebook riêng của bạn. Giữ thiết lập accelerator, image và Internet mà API cung cấp; thêm alias khi đường dẫn input khác giữa giao diện web và CLI.
+8. Copy source đầy đủ và các phiên bản input sang notebook riêng của bạn. Định danh input lấy từ metadata đính kèm, không lấy link trong mô tả dataset. Giữ thiết lập accelerator, image và Internet mà API cung cấp; thêm alias khi đường dẫn input khác giữa giao diện web và CLI.
 9. Push notebook, chờ chạy xong. Source/input không truy cập được hoặc notebook lỗi thì ghi lý do và xét ứng viên tiếp theo trong giới hạn số lần thử.
 10. Nhận diện file output dùng để nộp, tải đúng file đó, không sửa giá trị, không đổi tên, không ép schema hay đuôi CSV.
 11. Kiểm tra file tồn tại, không rỗng và chưa từng nộp cùng SHA-256. Nộp từ owned notebook hoặc upload file tùy loại cuộc thi.
