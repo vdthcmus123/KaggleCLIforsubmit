@@ -20,10 +20,9 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -69,9 +68,8 @@ class Defaults:
     language: str = "python"
     kernel_type: str = "all"
     output_type: str = "data"
-    file_pattern: str = r"(?i).*submission.*\.csv$"
+    file_pattern: str = "auto"
     submission_file_name: str | None = None
-    required_columns: tuple[str, ...] | None = None
     max_submissions_per_run: int = 1
     max_submit_attempts_per_run: int = 1
     max_submissions_per_day: int = 2
@@ -87,7 +85,6 @@ class Defaults:
     kernel_session_timeout_seconds: int | None = None
     source_kernel_versions: dict[str, int] = field(default_factory=dict)
     dataset_source_versions: dict[str, int] = field(default_factory=dict)
-    dataset_shapes: dict[str, tuple[int, int, int, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -102,7 +99,6 @@ class Competition:
     output_type: str
     file_pattern: str
     submission_file_name: str | None
-    required_columns: tuple[str, ...] | None
     max_submissions_per_run: int
     max_submit_attempts_per_run: int
     max_submissions_per_day: int
@@ -119,7 +115,6 @@ class Competition:
     kernel_session_timeout_seconds: int | None = None
     source_kernel_versions: dict[str, int] = field(default_factory=dict)
     dataset_source_versions: dict[str, int] = field(default_factory=dict)
-    dataset_shapes: dict[str, tuple[int, int, int, int]] = field(default_factory=dict)
     submit_kernel: str | None = None
     submit_kernel_version: str | None = None
 
@@ -237,9 +232,6 @@ def load_config(path: Path) -> list[Competition]:
         submission_file_name=maybe_str(
             defaults_raw.get("submission_file_name", Defaults.submission_file_name)
         ),
-        required_columns=maybe_str_list(
-            defaults_raw.get("required_columns", Defaults.required_columns)
-        ),
         max_submissions_per_run=int(
             defaults_raw.get(
                 "max_submissions_per_run", Defaults.max_submissions_per_run
@@ -309,10 +301,6 @@ def load_config(path: Path) -> list[Competition]:
             defaults_raw.get("dataset_source_versions"),
             "defaults.dataset_source_versions",
         ),
-        dataset_shapes=maybe_dataset_shapes(
-            defaults_raw.get("dataset_shapes"),
-            "defaults.dataset_shapes",
-        ),
     )
 
     competitions = []
@@ -333,9 +321,6 @@ def load_config(path: Path) -> list[Competition]:
                 file_pattern=str(item.get("file_pattern", defaults.file_pattern)),
                 submission_file_name=maybe_str(
                     item.get("submission_file_name", defaults.submission_file_name)
-                ),
-                required_columns=maybe_str_list(
-                    item.get("required_columns", defaults.required_columns)
                 ),
                 max_submissions_per_run=int(
                     item.get(
@@ -412,10 +397,6 @@ def load_config(path: Path) -> list[Competition]:
                     ),
                     f"{slug}.dataset_source_versions",
                 ),
-                dataset_shapes=maybe_dataset_shapes(
-                    item.get("dataset_shapes", defaults.dataset_shapes),
-                    f"{slug}.dataset_shapes",
-                ),
                 submit_kernel=maybe_str(item.get("submit_kernel")),
                 submit_kernel_version=maybe_str(item.get("submit_kernel_version")),
             )
@@ -435,16 +416,6 @@ def maybe_int(value: Any) -> int | None:
         return None
     text = str(value).strip()
     return int(text) if text else None
-
-
-def maybe_str_list(value: Any) -> tuple[str, ...] | None:
-    if value is None:
-        return None
-    if isinstance(value, (list, tuple)):
-        items = tuple(str(item).strip() for item in value if str(item).strip())
-        return items or None
-    text = str(value).strip()
-    return (text,) if text else None
 
 
 def unversioned_ref(ref: str) -> str:
@@ -493,43 +464,6 @@ def maybe_version_map(value: Any, setting_name: str) -> dict[str, int]:
                 f"{setting_name}[{raw_ref!r}] must be a positive integer."
             )
         result[ref] = version
-    return result
-
-
-def maybe_dataset_shapes(
-    value: Any,
-    setting_name: str,
-) -> dict[str, tuple[int, int, int, int]]:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ValueError(f"{setting_name} must be a TOML table.")
-
-    result: dict[str, tuple[int, int, int, int]] = {}
-    for raw_dataset, raw_shape in value.items():
-        dataset = str(raw_dataset).strip()
-        if not dataset:
-            raise ValueError(f"{setting_name} contains an empty dataset name.")
-        if not isinstance(raw_shape, (list, tuple)) or len(raw_shape) != 4:
-            raise ValueError(
-                f"{setting_name}[{raw_dataset!r}] must be [t, z, y, x]."
-            )
-        try:
-            shape = (
-                int(raw_shape[0]),
-                int(raw_shape[1]),
-                int(raw_shape[2]),
-                int(raw_shape[3]),
-            )
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"{setting_name}[{raw_dataset!r}] must contain four integers."
-            ) from exc
-        if any(size <= 0 for size in shape):
-            raise ValueError(
-                f"{setting_name}[{raw_dataset!r}] dimensions must be positive."
-            )
-        result[dataset] = shape
     return result
 
 
@@ -738,7 +672,7 @@ def list_competition_code_kernels(
 
 
 def list_kernels(comp: Competition) -> list[dict[str, Any]]:
-    if comp.code_competition and comp.auto_copy_notebook:
+    if comp.auto_copy_notebook:
         return list_competition_code_kernels(comp)
 
     args = [
@@ -1226,244 +1160,12 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-CELL_TRACKING_COLUMNS = (
-    "id",
-    "dataset",
-    "row_type",
-    "node_id",
-    "t",
-    "z",
-    "y",
-    "x",
-    "source_id",
-    "target_id",
-)
-CELL_TRACKING_INTEGER_COLUMNS = (
-    "id",
-    "node_id",
-    "t",
-    "z",
-    "y",
-    "x",
-    "source_id",
-    "target_id",
-)
-
-
-def validate_cell_tracking_rows(
-    path: Path,
-    dataset_shapes: dict[str, tuple[int, int, int, int]],
-    *,
-    validate_semantics: bool = True,
-) -> list[str]:
-    issue_counts: dict[str, int] = {}
-    issue_examples: dict[str, str] = {}
-    actual_datasets: set[str] = set()
-    node_ids: dict[str, set[int]] = defaultdict(set)
-    node_coordinates: dict[str, set[tuple[int, int, int, int]]] = defaultdict(set)
-    edges: list[tuple[int, str, int, int]] = []
-    row_count = 0
-
-    def issue(code: str, detail: str) -> None:
-        issue_counts[code] = issue_counts.get(code, 0) + 1
-        issue_examples.setdefault(code, detail)
-
-    try:
-        with path.open("r", encoding="utf-8-sig", newline="") as fh:
-            reader = csv.DictReader(fh)
-            for index, row in enumerate(reader):
-                row_count += 1
-                csv_line = index + 2
-                if None in row:
-                    issue("extra fields", f"CSV line {csv_line}")
-
-                dataset = (row.get("dataset") or "").strip()
-                if not dataset:
-                    issue("empty dataset", f"CSV line {csv_line}")
-                else:
-                    actual_datasets.add(dataset)
-
-                values: dict[str, int] = {}
-                integers_valid = True
-                for column in CELL_TRACKING_INTEGER_COLUMNS:
-                    raw = (row.get(column) or "").strip()
-                    try:
-                        value = int(raw)
-                    except (TypeError, ValueError):
-                        issue(
-                            f"invalid integer {column}",
-                            f"CSV line {csv_line}: {raw!r}",
-                        )
-                        integers_valid = False
-                        continue
-                    if raw != str(value):
-                        issue(
-                            f"non-canonical integer {column}",
-                            f"CSV line {csv_line}: {raw!r}",
-                        )
-                    values[column] = value
-
-                if not integers_valid:
-                    continue
-                if values["id"] != index:
-                    issue(
-                        "non-consecutive id",
-                        f"CSV line {csv_line}: expected {index}, got {values['id']}",
-                    )
-
-                row_type = (row.get("row_type") or "").strip()
-                if row_type == "node":
-                    if validate_semantics and values["node_id"] < 0:
-                        issue(
-                            "negative node_id",
-                            f"CSV line {csv_line}: {values['node_id']}",
-                        )
-                    if (
-                        validate_semantics
-                        and values["node_id"] in node_ids[dataset]
-                    ):
-                        issue(
-                            "duplicate node_id",
-                            f"CSV line {csv_line}: {dataset}/{values['node_id']}",
-                        )
-                    node_ids[dataset].add(values["node_id"])
-
-                    if validate_semantics:
-                        for column in ("t", "z", "y", "x"):
-                            if values[column] < 0:
-                                issue(
-                                    f"negative node coordinate {column}",
-                                    f"CSV line {csv_line}: {values[column]}",
-                                )
-                        shape = dataset_shapes.get(dataset)
-                        if shape is not None:
-                            for column, size in zip(
-                                ("t", "z", "y", "x"), shape
-                            ):
-                                if values[column] >= size:
-                                    issue(
-                                        f"node coordinate {column} out of bounds",
-                                        f"CSV line {csv_line}: "
-                                        f"{values[column]} >= {size}",
-                                    )
-                    coordinate = tuple(
-                        values[column] for column in ("t", "z", "y", "x")
-                    )
-                    if (
-                        validate_semantics
-                        and coordinate in node_coordinates[dataset]
-                    ):
-                        issue(
-                            "duplicate node coordinate",
-                            f"CSV line {csv_line}: {dataset}/{coordinate}",
-                        )
-                    node_coordinates[dataset].add(coordinate)
-                    if values["source_id"] != -1 or values["target_id"] != -1:
-                        issue(
-                            "node source/target must be -1",
-                            f"CSV line {csv_line}",
-                        )
-                elif row_type == "edge":
-                    if any(
-                        values[column] != -1
-                        for column in ("node_id", "t", "z", "y", "x")
-                    ):
-                        issue(
-                            "edge node fields must be -1",
-                            f"CSV line {csv_line}",
-                        )
-                    if (
-                        validate_semantics
-                        and (
-                            values["source_id"] < 0
-                            or values["target_id"] < 0
-                        )
-                    ):
-                        issue(
-                            "negative edge endpoint",
-                            f"CSV line {csv_line}: "
-                            f"{values['source_id']}->{values['target_id']}",
-                        )
-                    edges.append(
-                        (
-                            csv_line,
-                            dataset,
-                            values["source_id"],
-                            values["target_id"],
-                        )
-                    )
-                else:
-                    issue(
-                        "invalid row_type",
-                        f"CSV line {csv_line}: {row_type!r}",
-                    )
-    except (UnicodeDecodeError, csv.Error) as exc:
-        return [f"could not parse CSV rows: {exc}"]
-
-    if row_count == 0:
-        issue("no data rows", "CSV only contains a header")
-
-    if validate_semantics:
-        for csv_line, dataset, source_id, target_id in edges:
-            if source_id not in node_ids[dataset]:
-                issue(
-                    "edge source_id not found",
-                    f"CSV line {csv_line}: {dataset}/{source_id}",
-                )
-            if target_id not in node_ids[dataset]:
-                issue(
-                    "edge target_id not found",
-                    f"CSV line {csv_line}: {dataset}/{target_id}",
-                )
-
-    if dataset_shapes:
-        expected_datasets = set(dataset_shapes)
-        for dataset in sorted(expected_datasets - actual_datasets):
-            issue("missing test dataset", dataset)
-        for dataset in sorted(actual_datasets - expected_datasets):
-            issue("unexpected test dataset", dataset)
-
-    return [
-        f"{code}: {count}; first occurrence: {issue_examples[code]}"
-        for code, count in issue_counts.items()
-    ]
-
-
-def validate_submission_file(
-    path: Path,
-    required_columns: tuple[str, ...] | None,
-    dataset_shapes: dict[str, tuple[int, int, int, int]] | None = None,
-    *,
-    validate_rows: bool = True,
-) -> list[str]:
-    if not required_columns:
-        return []
-    if path.suffix.lower() != ".csv":
-        return [f"expected .csv, got {path.name}"]
-
-    try:
-        with path.open("r", encoding="utf-8-sig", newline="") as fh:
-            header = next(csv.reader(fh), None)
-    except UnicodeDecodeError as exc:
-        return [f"could not read CSV as UTF-8: {exc}"]
-    except csv.Error as exc:
-        return [f"could not parse CSV header: {exc}"]
-
-    if header is None:
-        return ["CSV is empty"]
-
-    actual = tuple(column.strip() for column in header)
-    if actual != required_columns:
-        return [
-            "CSV header mismatch: expected "
-            f"{','.join(required_columns)}; got {','.join(actual)}"
-        ]
-    if actual == CELL_TRACKING_COLUMNS:
-        return validate_cell_tracking_rows(
-            path,
-            dataset_shapes or {},
-            validate_semantics=validate_rows,
-        )
+def validate_submission_file(path: Path) -> list[str]:
+    """Check the artifact itself, without imposing any competition schema."""
+    if not path.is_file():
+        return [f"submission file does not exist: {path}"]
+    if path.stat().st_size == 0:
+        return [f"submission file is empty: {path.name}"]
     return []
 
 
@@ -1475,11 +1177,192 @@ def find_downloaded_files(folder: Path, pattern: re.Pattern[str]) -> list[Path]:
     return sorted(matches)
 
 
-def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]:
+def notebook_output_hints(source_dir: Path | None) -> set[str]:
+    """Read static output paths without executing any public notebook code."""
+    if source_dir is None or not (source_dir / "kernel-metadata.json").is_file():
+        return set()
+    metadata = json.loads(
+        (source_dir / "kernel-metadata.json").read_text(encoding="utf-8")
+    )
+    source_path = (source_dir / metadata.get("code_file", "")).resolve()
+    if not source_path.is_relative_to(source_dir.resolve()) or not source_path.is_file():
+        return set()
+    text = source_path.read_text(encoding="utf-8")
+    if source_path.suffix == ".ipynb":
+        cells = json.loads(text).get("cells", [])
+        blocks = [
+            "".join(cell.get("source", ""))
+            for cell in cells
+            if cell.get("cell_type") == "code"
+        ]
+    else:
+        blocks = [text]
+    values: dict[str, str] = {}
+    hints: set[str] = set()
+
+    def literal(node: ast.AST | None) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return values.get(node.id)
+        if isinstance(node, ast.BinOp):
+            left, right = literal(node.left), literal(node.right)
+            if left is not None and right is not None:
+                if isinstance(node.op, ast.Add):
+                    return left + right
+                if isinstance(node.op, ast.Div):
+                    return str(PurePosixPath(left) / right)
+        if isinstance(node, ast.Call):
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", "")
+            if name in {"Path", "str"} and node.args:
+                return literal(node.args[0])
+            if name in {"join", "joinpath"}:
+                parts = [literal(arg) for arg in node.args]
+                if name == "joinpath" and isinstance(node.func, ast.Attribute):
+                    parts.insert(0, literal(node.func.value))
+                if parts and all(part is not None for part in parts):
+                    return str(PurePosixPath(*(str(part) for part in parts)))
+        return None
+
+    writers = {
+        "to_csv", "to_parquet", "to_json", "to_feather", "to_excel",
+        "write_csv", "write_parquet", "save", "savez", "savez_compressed",
+        "savetxt", "ZipFile", "open",
+    }
+    for block in blocks:
+        # Notebook magics are not Python statements; other cells remain useful.
+        block = "\n".join(
+            "" if line.lstrip().startswith(("!", "%")) else line
+            for line in block.splitlines()
+        )
+        try:
+            tree = ast.parse(block)
+        except SyntaxError:
+            continue
+        for node in sorted(ast.walk(tree), key=lambda item: getattr(item, "lineno", 0)):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                value = literal(node.value)
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        values.pop(target.id, None)
+                        if value is not None:
+                            values[target.id] = value
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", "")
+            path = None
+            if name in writers:
+                if name in {"open", "ZipFile"}:
+                    mode = literal(node.args[1]) if len(node.args) > 1 else None
+                    mode = next(
+                        (literal(kw.value) for kw in node.keywords if kw.arg == "mode"),
+                        mode,
+                    )
+                    if not mode or not any(flag in mode for flag in "wax"):
+                        continue
+                path = literal(node.args[0]) if node.args else None
+                if path is None:
+                    path = next(
+                        (
+                            literal(kw.value) for kw in node.keywords
+                            if kw.arg in {"path", "path_or_buf", "file", "filename", "fname"}
+                        ),
+                        None,
+                    )
+            elif name in {"write_text", "write_bytes"} and isinstance(
+                node.func, ast.Attribute
+            ):
+                path = literal(node.func.value)
+            if path and "/kaggle/input/" not in path:
+                hints.add(
+                    path.replace("\\", "/")
+                    .removeprefix("/kaggle/working/")
+                    .removeprefix("./")
+                )
+    return hints
+
+
+def select_output_names(
+    comp: Competition,
+    names: list[str],
+    *,
+    source_dir: Path | None = None,
+) -> list[str]:
+    names = sorted(set(name.replace("\\", "/").removeprefix("./") for name in names))
+    if any(
+        name.startswith("/") or ".." in name.split("/")
+        or re.match(r"^[A-Za-z]:", name)
+        for name in names
+    ):
+        raise ValueError("Kaggle returned an unsafe output file path.")
+    if comp.submission_file_name:
+        wanted = comp.submission_file_name.replace("\\", "/")
+        matches = [name for name in names if name == wanted]
+        if not matches and "/" not in wanted:
+            matches = [name for name in names if Path(name).name == wanted]
+    elif comp.file_pattern != "auto":
+        pattern = re.compile(comp.file_pattern)
+        return [name for name in names if pattern.search(Path(name).name)]
+    else:
+        matches = [
+            name for name in names
+            if Path(name).name.lower() == "submission"
+            or Path(name).name.lower().startswith("submission.")
+        ]
+        if not matches:
+            matches = [name for name in names if "submission" in Path(name).name.lower()]
+        if not matches:
+            hints = notebook_output_hints(source_dir)
+            matches = [name for name in names if name in hints]
+        if not matches:
+            auxiliary_suffixes = {
+                ".log", ".ipynb", ".py", ".pt", ".pth", ".onnx", ".safetensors",
+            }
+            matches = [
+                name for name in names
+                if Path(name).suffix.lower() not in auxiliary_suffixes
+                and not Path(name).name.startswith("__")
+            ]
+    if len(matches) > 1:
+        raise ValueError(
+            f"Ambiguous submission outputs: {', '.join(matches)}. "
+            "Set submission_file_name to the native output path; "
+            "no file will be guessed or renamed."
+        )
+    return matches
+
+
+def output_relative_name(path: Path, comp: Competition, kernel: str, out_dir: Path) -> str:
+    root = out_dir / comp.slug / kernel.replace("/", "__")
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.name
+
+
+def download_output(
+    comp: Competition,
+    kernel: str,
+    out_dir: Path,
+    *,
+    source_dir: Path | None = None,
+) -> list[Path]:
     target = out_dir / comp.slug / kernel.replace("/", "__")
     if target.exists():
         shutil.rmtree(target)
     target.mkdir(parents=True, exist_ok=True)
+    pattern = comp.file_pattern
+    if pattern == "auto" or comp.submission_file_name:
+        names = [
+            name for item in list_kernel_files(kernel)
+            if (name := output_file_name(item))
+        ]
+        selected = select_output_names(comp, names, source_dir=source_dir)
+        if not selected:
+            return []
+        pattern = "^(?:" + "|".join(re.escape(name) for name in selected) + ")$"
+        print(f"Selected notebook output: {', '.join(selected)}")
     run_cmd(
         [
             "kaggle",
@@ -1490,13 +1373,15 @@ def download_output(comp: Competition, kernel: str, out_dir: Path) -> list[Path]
             str(target),
             "-o",
             "--file-pattern",
-            comp.file_pattern,
+            pattern,
             "--page-size",
             "200",
         ],
         capture=True,
     )
-    return find_downloaded_files(target, re.compile(comp.file_pattern))
+    if comp.file_pattern == "auto" or comp.submission_file_name:
+        return [target / name for name in selected if (target / name).is_file()]
+    return find_downloaded_files(target, re.compile(pattern))
 
 
 def wait_for_submission_result(api: Any, comp: Competition, submission_ref: int) -> None:
@@ -1585,6 +1470,7 @@ def submit_file(
     message: str,
     *,
     kernel_version: str | None = None,
+    output_file_name: str | None = None,
 ) -> int:
     try:
         from kaggle import api  # type: ignore[import-not-found]
@@ -1599,7 +1485,7 @@ def submit_file(
                     "an owned Kaggle notebook ref and version."
                 )
             result = api.competition_submit_code(
-                Path(file_path).name,
+                output_file_name or Path(file_path).name,
                 message,
                 comp.slug,
                 submit_kernel,
@@ -2738,7 +2624,6 @@ def process_configured_code_submission(
         )
         return report
 
-    pattern = re.compile(comp.file_pattern)
     output_ref = versioned_kernel_ref(comp.submit_kernel, comp.submit_kernel_version)
     report["kernels_seen"] = 1
 
@@ -2761,7 +2646,13 @@ def process_configured_code_submission(
         return report
 
     names = [name for name in (output_file_name(item) for item in files) if name]
-    matches = [name for name in names if pattern.search(Path(name).name)]
+    try:
+        matches = select_output_names(comp, names)
+    except ValueError as exc:
+        report["errors"].append(
+            {"kernel": output_ref, "stage": "select output", "error": str(exc)}
+        )
+        return report
     report["candidates"].append({"kernel": output_ref, "matching_files": matches})
 
     if not matches:
@@ -2794,11 +2685,7 @@ def process_configured_code_submission(
             selected = select_downloaded_file(downloaded, file_name)
             if selected is None:
                 raise FileNotFoundError(f"Downloaded output did not contain {file_name}")
-            validation_errors = validate_submission_file(
-                selected,
-                comp.required_columns,
-                comp.dataset_shapes,
-            )
+            validation_errors = validate_submission_file(selected)
             if validation_errors:
                 report["skipped"].append(
                     "invalid submission format "
@@ -2813,6 +2700,7 @@ def process_configured_code_submission(
                 comp.submit_kernel,
                 selected,
                 message,
+                output_file_name=file_name,
             )
             record = {
                 "competition": comp.slug,
@@ -2874,7 +2762,7 @@ def process_auto_copy_code_submission(
     now: datetime,
     report: dict[str, Any],
 ) -> dict[str, Any]:
-    pattern = re.compile(comp.file_pattern)
+    pattern = re.compile(".*" if comp.file_pattern == "auto" else comp.file_pattern)
     already_today = submissions_today(state, comp.slug, now)
     remaining_today = max(comp.max_submissions_per_day - already_today, 0)
     remaining_run = min(comp.max_submissions_per_run, remaining_today)
@@ -3006,7 +2894,12 @@ def process_auto_copy_code_submission(
                 timeout_seconds=comp.notebook_wait_timeout_seconds,
                 poll_seconds=comp.notebook_poll_seconds,
             )
-            downloaded = download_output(comp, owned_ref, output_dir)
+            download_kwargs: dict[str, Any] = {}
+            if comp.file_pattern == "auto":
+                download_kwargs["source_dir"] = (
+                    work_dir / comp.slug / owned_ref.replace("/", "__")
+                )
+            downloaded = download_output(comp, owned_ref, output_dir, **download_kwargs)
         except KernelRunFailedError as exc:
             reason = error_text(exc)
             rejected = remember_rejected_source(
@@ -3065,14 +2958,20 @@ def process_auto_copy_code_submission(
             )
             continue
         candidate_report["matching_files"] = [
-            path.name for path in notebook_outputs
+            output_relative_name(path, comp, owned_ref, output_dir)
+            for path in notebook_outputs
         ]
 
         if comp.submission_file_name:
             native_outputs = [
                 path
                 for path in notebook_outputs
-                if path.name == comp.submission_file_name
+                if output_relative_name(path, comp, owned_ref, output_dir)
+                == comp.submission_file_name
+                or (
+                    "/" not in comp.submission_file_name
+                    and path.name == comp.submission_file_name
+                )
             ]
             if not native_outputs:
                 reason = (
@@ -3094,7 +2993,7 @@ def process_auto_copy_code_submission(
             notebook_outputs = native_outputs[:1]
 
         for selected in notebook_outputs:
-            source_file_name = selected.name
+            source_file_name = output_relative_name(selected, comp, owned_ref, output_dir)
             submission_path = selected
             submission_kernel_ref = owned_ref
             submission_kernel_version = owned_version
@@ -3102,22 +3001,14 @@ def process_auto_copy_code_submission(
             message = ""
             try:
                 file_hash = sha256_file(submission_path)
-                validation_kwargs: dict[str, Any] = {}
-                if execution_mode == EXACT_SCORE_COPY_MODE:
-                    validation_kwargs["validate_rows"] = False
-                validation_errors = validate_submission_file(
-                    submission_path,
-                    comp.required_columns,
-                    comp.dataset_shapes,
-                    **validation_kwargs,
-                )
+                validation_errors = validate_submission_file(submission_path)
                 if validation_errors:
                     report["skipped"].append(
                         "invalid submission format "
                         f"{owned_ref}/{owned_version}:{source_file_name}: "
                         f"{'; '.join(validation_errors)}"
                     )
-                    if comp.submission_file_name:
+                    if comp.submission_file_name or comp.file_pattern == "auto":
                         rejected = remember_rejected_source(
                             state,
                             comp=comp,
@@ -3140,7 +3031,7 @@ def process_auto_copy_code_submission(
                     report["skipped"].append(
                         f"rejected source {launched_source_ref}: {reason}"
                     )
-                    if comp.submission_file_name:
+                    if comp.submission_file_name or comp.file_pattern == "auto":
                         rejected = remember_rejected_source(
                             state,
                             comp=comp,
@@ -3166,6 +3057,7 @@ def process_auto_copy_code_submission(
                     submission_path,
                     message,
                     kernel_version=submission_kernel_version,
+                    output_file_name=source_file_name,
                 )
                 record = {
                     "competition": comp.slug,
@@ -3173,7 +3065,7 @@ def process_auto_copy_code_submission(
                     "kernel_version": submission_kernel_version,
                     "source_kernel_ref": launched_source_ref,
                     "source_file_name": source_file_name,
-                    "file_name": submission_path.name,
+                    "file_name": source_file_name,
                     "sha256": file_hash,
                     "submitted_at_utc": utc_now().isoformat(),
                     "message": message,
@@ -3193,7 +3085,7 @@ def process_auto_copy_code_submission(
                     kernel_ref=submission_kernel_ref,
                     kernel_version=submission_kernel_version,
                     source_kernel_ref=launched_source_ref,
-                    file_name=submission_path.name,
+                    file_name=source_file_name,
                     file_hash=file_hash,
                     message=message,
                     pending=exc,
@@ -3222,7 +3114,7 @@ def process_auto_copy_code_submission(
                         kernel_ref=submission_kernel_ref,
                         kernel_version=submission_kernel_version,
                         source_kernel_ref=launched_source_ref,
-                        file_name=submission_path.name,
+                        file_name=source_file_name,
                         file_hash=file_hash,
                         message=message,
                         error=exc,
@@ -3293,7 +3185,7 @@ def process_competition(
                 report["skipped"].append("submission still pending")
                 return report
 
-    if comp.code_competition and comp.auto_copy_notebook:
+    if comp.auto_copy_notebook:
         return process_auto_copy_code_submission(
             comp,
             state=state,
@@ -3327,7 +3219,6 @@ def process_competition(
         )
         return report
 
-    pattern = re.compile(comp.file_pattern)
     already_today = submissions_today(state, comp.slug, now)
     remaining_today = max(comp.max_submissions_per_day - already_today, 0)
     remaining_run = min(comp.max_submissions_per_run, remaining_today)
@@ -3362,7 +3253,11 @@ def process_competition(
             continue
 
         names = [name for name in (output_file_name(item) for item in files) if name]
-        matches = [name for name in names if pattern.search(Path(name).name)]
+        try:
+            matches = select_output_names(comp, names)
+        except ValueError as exc:
+            report["errors"].append({"kernel": ref, "stage": "select output", "error": str(exc)})
+            continue
         report["candidates"].append({"kernel": ref, "matching_files": matches})
 
         for file_name in matches:
@@ -3388,11 +3283,7 @@ def process_competition(
                     raise FileNotFoundError(
                         f"Downloaded output did not contain {file_name}"
                     )
-                validation_errors = validate_submission_file(
-                    selected,
-                    comp.required_columns,
-                    comp.dataset_shapes,
-                )
+                validation_errors = validate_submission_file(selected)
                 if validation_errors:
                     report["skipped"].append(
                         "invalid submission format "
@@ -3402,7 +3293,9 @@ def process_competition(
                 file_hash = sha256_file(selected)
                 message = make_message(comp, ref, Path(file_name).name, file_hash)
                 remaining_attempts -= 1
-                submission_ref = submit_file(comp, ref, selected, message)
+                submission_ref = submit_file(
+                    comp, ref, selected, message, output_file_name=file_name
+                )
                 record = {
                     "competition": comp.slug,
                     "kernel_ref": ref,
@@ -3459,11 +3352,12 @@ def process_competition(
 
 
 def select_downloaded_file(files: list[Path], expected_name: str) -> Path | None:
-    expected_base = Path(expected_name).name
-    for path in files:
-        if path.name == expected_base:
-            return path
-    return files[0] if files else None
+    expected = expected_name.replace("\\", "/").removeprefix("./")
+    matches = [
+        path for path in files
+        if path.as_posix() == expected or path.as_posix().endswith("/" + expected)
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def cmd_error(exc: subprocess.CalledProcessError) -> str:

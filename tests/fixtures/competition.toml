@@ -1,0 +1,16 @@
+[defaults]
+sort_by = "hotness"
+file_pattern = "(?i).*submission.*\\.csv$"
+
+[[competitions]]
+slug = "biohub-cell-tracking-during-development"
+enabled = true
+auto_submit = true
+code_competition = true
+auto_copy_notebook = true
+submission_file_name = "submission.csv"
+require_public_score = true
+max_submissions_per_run = 1
+max_submit_attempts_per_run = 3
+max_submissions_per_day = 5
+notebook_wait_timeout_seconds = 2700

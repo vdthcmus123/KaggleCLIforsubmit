@@ -1,55 +1,37 @@
-# Copy this file to config.toml and edit it.
-
+# Copy this file to config.toml. Join the competition on Kaggle first.
 [defaults]
 top_n = 100
-sort_by = "scoreDescending"
+sort_by = "hotness"
 language = "python"
-kernel_type = "all"
+kernel_type = "notebook"
 output_type = "data"
-file_pattern = "(?i).*submission.*\\.csv$"
-# Set this when a competition requires that exact native notebook output name.
-# Alternate files are not renamed to satisfy this setting.
-# submission_file_name = "submission.csv"
-code_competition = false
-auto_copy_notebook = false
+file_pattern = "auto"
+auto_copy_notebook = true
 copy_slug_prefix = "auto"
-notebook_wait_timeout_seconds = 21600
+notebook_wait_timeout_seconds = 2700
 notebook_poll_seconds = 60
 submission_wait_timeout_seconds = 1800
 submission_poll_seconds = 15
-require_public_score = false
+require_public_score = true
 source_kernel_versions = {}
 dataset_source_versions = {}
 max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
-max_submissions_per_day = 2
+max_submit_attempts_per_run = 3
+max_submissions_per_day = 5
 message_template = "AUTO public kernel {kernel_ref} file {file_name}"
 
 [[competitions]]
-# Example only. Replace with a competition slug you have joined.
-slug = "titanic"
+slug = "rsna-knee-abnormality-detection"
 enabled = false
 auto_submit = false
-top_n = 100
-sort_by = "scoreDescending"
-file_pattern = "(?i).*submission.*\\.csv$"
-code_competition = false
-max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
-max_submissions_per_day = 2
+# true: submit the output of an owned notebook version.
+# false: upload the generated output file directly.
+code_competition = true
+# Optional only when several output artifacts are ambiguous.
+# submission_file_name = "results/predictions.zip"
 
 [[competitions]]
-# Add more competitions as needed.
 slug = "your-competition-slug"
 enabled = false
 auto_submit = false
-top_n = 100
-sort_by = "scoreDescending"
-file_pattern = "(?i).*submission.*\\.csv$"
 code_competition = false
-max_submissions_per_run = 1
-max_submit_attempts_per_run = 1
-max_submissions_per_day = 2
-
-# For a notebook-only competition with auto_copy_notebook = true, use
-# sort_by = "hotness" to scan Kaggle's Hotness list from the beginning.

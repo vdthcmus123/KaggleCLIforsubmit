@@ -1,4 +1,3 @@
-import csv
 import json
 import tempfile
 import unittest
@@ -25,7 +24,7 @@ def notebook_html(script_version_id: int) -> str:
 
 class BestScoreVersionTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.competition = kaggle_harvest.load_config(ROOT / "config.toml")[0]
+        self.competition = kaggle_harvest.load_config(ROOT / "tests" / "fixtures" / "competition.toml")[0]
         self.version_sessions = {
             version: 330_000_000 + version * 1000 for version in range(1, 34)
         }
@@ -37,14 +36,10 @@ class BestScoreVersionTests(unittest.TestCase):
         version = int(url.rsplit(marker, 1)[1])
         return notebook_html(self.version_sessions[version])
 
-    def test_biohub_config_uses_dynamic_resolution(self) -> None:
+    def test_fixture_config_uses_dynamic_resolution(self) -> None:
         self.assertEqual(self.competition.sort_by, "hotness")
         self.assertEqual(self.competition.source_kernel_versions, {})
         self.assertEqual(self.competition.dataset_source_versions, {})
-        self.assertEqual(
-            self.competition.dataset_shapes["44b6_0113de3b"],
-            (100, 64, 256, 256),
-        )
         self.assertEqual(self.competition.submission_file_name, "submission.csv")
         self.assertTrue(self.competition.require_public_score)
         self.assertEqual(self.competition.max_submit_attempts_per_run, 3)
@@ -650,7 +645,7 @@ class BestScoreVersionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             submission = Path(temp_dir) / "submission.csv"
             submission.write_text(
-                ",".join(kaggle_harvest.CELL_TRACKING_COLUMNS) + "\n",
+                "any_column\n",
                 encoding="utf-8",
             )
             with (
@@ -701,12 +696,7 @@ class BestScoreVersionTests(unittest.TestCase):
                     report=report,
                 )
 
-        validate_mock.assert_called_once_with(
-            submission,
-            self.competition.required_columns,
-            self.competition.dataset_shapes,
-            validate_rows=False,
-        )
+        validate_mock.assert_called_once_with(submission)
         submit_mock.assert_called_once()
         self.assertEqual(len(report["submitted"]), 1)
 
@@ -1152,118 +1142,6 @@ class BestScoreVersionTests(unittest.TestCase):
         self.assertIn("rejected source", report["skipped"][0])
         self.assertEqual(report["errors"], [])
 
-    def test_cell_tracking_validation_rejects_negative_sentinel_nodes(self) -> None:
-        shape = {"test_dataset": (2, 3, 4, 5)}
-        valid_rows = [
-            [0, "test_dataset", "node", 1, 0, 1, 2, 3, -1, -1],
-            [1, "test_dataset", "node", 2, 1, 2, 3, 4, -1, -1],
-            [2, "test_dataset", "edge", -1, -1, -1, -1, -1, 1, 2],
-        ]
-        invalid_rows = [
-            [0, "test_dataset", "node", 1, -1000, -10000, -10000, -10000, -1, -1],
-            [1, "test_dataset", "node", 2, 1, 2, 3, 4, -1, -1],
-            [2, "test_dataset", "edge", -1, -1, -1, -1, -1, 1, 2],
-        ]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            valid_path = Path(temp_dir) / "submission_clean.csv"
-            invalid_path = Path(temp_dir) / "submission.csv"
-            for path, rows in ((valid_path, valid_rows), (invalid_path, invalid_rows)):
-                with path.open("w", encoding="utf-8", newline="") as fh:
-                    writer = csv.writer(fh)
-                    writer.writerow(kaggle_harvest.CELL_TRACKING_COLUMNS)
-                    writer.writerows(rows)
-
-            self.assertEqual(
-                kaggle_harvest.validate_submission_file(
-                    valid_path,
-                    kaggle_harvest.CELL_TRACKING_COLUMNS,
-                    shape,
-                ),
-                [],
-            )
-            errors = kaggle_harvest.validate_submission_file(
-                invalid_path,
-                kaggle_harvest.CELL_TRACKING_COLUMNS,
-                shape,
-            )
-
-        self.assertTrue(any("negative node coordinate t" in error for error in errors))
-        self.assertTrue(any("negative node coordinate z" in error for error in errors))
-
-    def test_exact_score_copy_trusts_linked_submission_row_values(self) -> None:
-        shape = {"test_dataset": (2, 3, 4, 5)}
-        rows = [
-            [0, "test_dataset", "node", 1, -1000, -10000, -10000, -10000, -1, -1]
-        ]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            submission = Path(temp_dir) / "submission.csv"
-            with submission.open("w", encoding="utf-8", newline="") as fh:
-                writer = csv.writer(fh)
-                writer.writerow(kaggle_harvest.CELL_TRACKING_COLUMNS)
-                writer.writerows(rows)
-
-            strict_errors = kaggle_harvest.validate_submission_file(
-                submission,
-                kaggle_harvest.CELL_TRACKING_COLUMNS,
-                shape,
-            )
-            exact_score_errors = kaggle_harvest.validate_submission_file(
-                submission,
-                kaggle_harvest.CELL_TRACKING_COLUMNS,
-                shape,
-                validate_rows=False,
-            )
-
-        self.assertTrue(
-            any("negative node coordinate t" in error for error in strict_errors)
-        )
-        self.assertEqual(exact_score_errors, [])
-
-    def test_exact_score_copy_rejects_header_only_submission(self) -> None:
-        shape = {"test_dataset": (2, 3, 4, 5)}
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            submission = Path(temp_dir) / "submission.csv"
-            submission.write_text(
-                ",".join(kaggle_harvest.CELL_TRACKING_COLUMNS) + "\n",
-                encoding="utf-8",
-            )
-            errors = kaggle_harvest.validate_submission_file(
-                submission,
-                kaggle_harvest.CELL_TRACKING_COLUMNS,
-                shape,
-                validate_rows=False,
-            )
-
-        self.assertTrue(any("no data rows" in error for error in errors))
-        self.assertTrue(any("missing test dataset" in error for error in errors))
-
-    def test_cell_tracking_validation_rejects_duplicate_node_coordinates(self) -> None:
-        shape = {"test_dataset": (2, 3, 4, 5)}
-        rows = [
-            [0, "test_dataset", "node", 1, 0, 1, 2, 3, -1, -1],
-            [1, "test_dataset", "node", 2, 0, 1, 2, 3, -1, -1],
-            [2, "test_dataset", "edge", -1, -1, -1, -1, -1, 1, 2],
-        ]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "submission.csv"
-            with path.open("w", encoding="utf-8", newline="") as fh:
-                writer = csv.writer(fh)
-                writer.writerow(kaggle_harvest.CELL_TRACKING_COLUMNS)
-                writer.writerows(rows)
-            errors = kaggle_harvest.validate_submission_file(
-                path,
-                kaggle_harvest.CELL_TRACKING_COLUMNS,
-                shape,
-            )
-
-        self.assertTrue(
-            any("duplicate node coordinate" in error for error in errors)
-        )
-
     def test_submission_poll_rejects_complete_status_with_scoring_error(self) -> None:
         submission = SimpleNamespace(
             ref=123,
@@ -1700,7 +1578,10 @@ class BestScoreVersionTests(unittest.TestCase):
             target.mkdir(parents=True)
             (target / "submission.csv").write_text("stale", encoding="utf-8")
 
-            with patch.object(kaggle_harvest, "run_cmd"):
+            with (
+                patch.object(kaggle_harvest, "run_cmd"),
+                patch.object(kaggle_harvest, "list_kernel_files", return_value=[]),
+            ):
                 downloaded = kaggle_harvest.download_output(
                     self.competition,
                     "example/auto-biohub-clone",

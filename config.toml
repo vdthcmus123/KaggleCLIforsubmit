@@ -4,11 +4,11 @@ sort_by = "hotness"
 language = "python"
 kernel_type = "notebook"
 output_type = "data"
-file_pattern = "(?i).*submission.*\\.csv$"
+file_pattern = "auto"
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
-message_template = "AUTO RSNA public kernel {kernel_ref} file {file_name}"
+message_template = "AUTO public kernel {kernel_ref} file {file_name}"
 
 [[competitions]]
 slug = "rsna-knee-abnormality-detection"
@@ -17,8 +17,7 @@ auto_submit = true
 top_n = 100
 sort_by = "hotness"
 kernel_type = "notebook"
-file_pattern = "(?i).*submission.*\\.csv$"
-submission_file_name = "submission.csv"
+file_pattern = "auto"
 code_competition = true
 auto_copy_notebook = true
 copy_slug_prefix = "auto"
@@ -29,20 +28,6 @@ submission_poll_seconds = 15
 require_public_score = true
 source_kernel_versions = {}
 dataset_source_versions = {}
-required_columns = [
-  "StudyInstanceUID",
-  "ACLt",
-  "MCL",
-  "Medial Meniscus",
-  "Lateral Meniscus",
-  "Medial OA",
-  "Lateral OA",
-  "PF OA",
-  "Effusion",
-  "Synovitis",
-  "Baker's,Contusion",
-  "Fracture"
-]
 max_submissions_per_run = 1
 max_submit_attempts_per_run = 3
 max_submissions_per_day = 5
