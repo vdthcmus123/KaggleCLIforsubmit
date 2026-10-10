@@ -70,6 +70,22 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ra-57d6987e5b",
+      "kernel_version": "1",
+      "message": "AUTO public kernel rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scan_rank": 2,
+      "scoring_status": "pending",
+      "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "source_kernel_ref": "rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1",
+      "source_public_score": 0.95,
+      "submission_ref": 57048473,
+      "submitted_at_utc": "2026-10-10T17:39:06.437775+00:00"
     }
   ],
   "rejected_sources": [
