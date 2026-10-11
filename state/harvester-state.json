@@ -75,17 +75,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ra-57d6987e5b",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-je-0a0ee07ef6",
       "kernel_version": "1",
-      "message": "AUTO public kernel rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1 file submission.csv",
+      "message": "AUTO public kernel jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 2,
+      "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
-      "source_kernel_ref": "rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1",
-      "source_public_score": 0.95,
-      "submission_ref": 57048473,
-      "submitted_at_utc": "2026-10-10T17:39:06.437775+00:00"
+      "sha256": "2a174e07f516bfcbe062eb58436326dbad63b00a127d0042e07e80fad0beec68",
+      "source_kernel_ref": "jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4",
+      "source_public_score": 0.954,
+      "submission_ref": 57066593,
+      "submitted_at_utc": "2026-10-11T08:02:56.592926+00:00"
     }
   ],
   "rejected_sources": [
@@ -1601,6 +1601,23 @@
       "source_public_score": 0.965,
       "submission_ref": 56746556,
       "submitted_at_utc": "2026-10-01T08:11:35.171945+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ra-57d6987e5b",
+      "kernel_version": "1",
+      "message": "AUTO public kernel rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1 file submission.csv",
+      "public_score": "0.950",
+      "scan_rank": 2,
+      "scored_at_utc": "2026-10-11T06:55:26.869867+00:00",
+      "scoring_status": "complete",
+      "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "source_kernel_ref": "rainycloudss/rsna-knee-apex-grandmaster-stack-v10/1",
+      "source_public_score": 0.95,
+      "submission_ref": 57048473,
+      "submitted_at_utc": "2026-10-10T17:39:06.437775+00:00"
     }
   ]
 }
