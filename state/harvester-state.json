@@ -70,22 +70,6 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
-    },
-    {
-      "competition": "rsna-knee-abnormality-detection",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-je-0a0ee07ef6",
-      "kernel_version": "1",
-      "message": "AUTO public kernel jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
-      "scoring_status": "pending",
-      "sha256": "2a174e07f516bfcbe062eb58436326dbad63b00a127d0042e07e80fad0beec68",
-      "source_kernel_ref": "jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4",
-      "source_public_score": 0.954,
-      "submission_ref": 57066593,
-      "submitted_at_utc": "2026-10-11T08:02:56.592926+00:00"
     }
   ],
   "rejected_sources": [
@@ -1618,6 +1602,23 @@
       "source_public_score": 0.95,
       "submission_ref": 57048473,
       "submitted_at_utc": "2026-10-10T17:39:06.437775+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-je-0a0ee07ef6",
+      "kernel_version": "1",
+      "message": "AUTO public kernel jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4 file submission.csv",
+      "public_score": "0.954",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-10-12T07:05:33.421569+00:00",
+      "scoring_status": "complete",
+      "sha256": "2a174e07f516bfcbe062eb58436326dbad63b00a127d0042e07e80fad0beec68",
+      "source_kernel_ref": "jenillangaliya/rsna-knee-lb-0-954-dual-sota-ensemble/4",
+      "source_public_score": 0.954,
+      "submission_ref": 57066593,
+      "submitted_at_utc": "2026-10-11T08:02:56.592926+00:00"
     }
   ]
 }
