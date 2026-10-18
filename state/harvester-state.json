@@ -70,22 +70,6 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
-    },
-    {
-      "competition": "rsna-knee-abnormality-detection",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-la-8c5ae8baba",
-      "kernel_version": "1",
-      "message": "AUTO public kernel lavinwins/top-1-gold/4 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 2,
-      "scoring_status": "pending",
-      "sha256": "5dd9febae16c11b76450eecb92bbc67669214f71cdd6edce69ec48a02376d7b4",
-      "source_kernel_ref": "lavinwins/top-1-gold/4",
-      "source_public_score": 0.956,
-      "submission_ref": 57297003,
-      "submitted_at_utc": "2026-10-17T06:03:23.257037+00:00"
     }
   ],
   "rejected_sources": [
@@ -1642,6 +1626,39 @@
       "source_public_score": 0.954,
       "submission_ref": 57066593,
       "submitted_at_utc": "2026-10-11T08:02:56.592926+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-la-8c5ae8baba",
+      "kernel_version": "1",
+      "message": "AUTO public kernel lavinwins/top-1-gold/4 file submission.csv",
+      "public_score": "0.958",
+      "scan_rank": 2,
+      "scored_at_utc": "2026-10-18T05:33:45.490498+00:00",
+      "scoring_status": "complete",
+      "sha256": "5dd9febae16c11b76450eecb92bbc67669214f71cdd6edce69ec48a02376d7b4",
+      "source_kernel_ref": "lavinwins/top-1-gold/4",
+      "source_public_score": 0.956,
+      "submission_ref": 57297003,
+      "submitted_at_utc": "2026-10-17T06:03:23.257037+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-he-bca576681e",
+      "kernel_version": "1",
+      "message": "AUTO public kernel hengck23/mavit-288-baseline-01-1-5sec-study-1gpu/4 file submission.csv",
+      "scan_rank": 2,
+      "scoring_status": "complete",
+      "sha256": "374eb446bbed5eb1172bb6cea4ca880ca8053ffd77a285a7f59a7df3c2316573",
+      "source_file_name": "submission.csv",
+      "source_kernel_ref": "hengck23/mavit-288-baseline-01-1-5sec-study-1gpu/4",
+      "source_public_score": 0.935,
+      "submission_ref": 57340696,
+      "submitted_at_utc": "2026-10-18T06:04:19.758484+00:00"
     }
   ]
 }
