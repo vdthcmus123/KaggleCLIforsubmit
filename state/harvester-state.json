@@ -75,17 +75,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-na-7837cdedf1",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-la-1eb1a85d9c",
       "kernel_version": "1",
-      "message": "AUTO public kernel nartaa/rsna-knee-s6fall-solo/2 file submission.csv",
+      "message": "AUTO public kernel laimerbotrolenk/rsna-four-model-ensemble/1 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
       "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "00031c5337550d13acaf2e8dbf8743e260169d93da64296d479f2c0fb0c0d6b0",
-      "source_kernel_ref": "nartaa/rsna-knee-s6fall-solo/2",
-      "source_public_score": 0.95,
-      "submission_ref": 57384810,
-      "submitted_at_utc": "2026-10-19T06:28:11.247679+00:00"
+      "sha256": "3a0186159f91cb620bb5abecf5f7fe0325fa024b69d3c5138eb2aef34f67e43a",
+      "source_kernel_ref": "laimerbotrolenk/rsna-four-model-ensemble/1",
+      "source_public_score": 0.957,
+      "submission_ref": 57424726,
+      "submitted_at_utc": "2026-10-20T06:26:21.434823+00:00"
     }
   ],
   "rejected_sources": [
@@ -1675,6 +1675,23 @@
       "source_public_score": 0.935,
       "submission_ref": 57340696,
       "submitted_at_utc": "2026-10-18T06:04:19.758484+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-na-7837cdedf1",
+      "kernel_version": "1",
+      "message": "AUTO public kernel nartaa/rsna-knee-s6fall-solo/2 file submission.csv",
+      "public_score": "0.950",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-10-20T05:45:03.598972+00:00",
+      "scoring_status": "complete",
+      "sha256": "00031c5337550d13acaf2e8dbf8743e260169d93da64296d479f2c0fb0c0d6b0",
+      "source_kernel_ref": "nartaa/rsna-knee-s6fall-solo/2",
+      "source_public_score": 0.95,
+      "submission_ref": 57384810,
+      "submitted_at_utc": "2026-10-19T06:28:11.247679+00:00"
     }
   ]
 }
