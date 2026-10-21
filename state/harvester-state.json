@@ -75,17 +75,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-la-1eb1a85d9c",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ma-b1d7f8c308",
       "kernel_version": "1",
-      "message": "AUTO public kernel laimerbotrolenk/rsna-four-model-ensemble/1 file submission.csv",
+      "message": "AUTO public kernel mayankraaz/rsna-knee-abnormality-pipeline/7 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
+      "scan_rank": 2,
       "scoring_status": "pending",
-      "sha256": "3a0186159f91cb620bb5abecf5f7fe0325fa024b69d3c5138eb2aef34f67e43a",
-      "source_kernel_ref": "laimerbotrolenk/rsna-four-model-ensemble/1",
-      "source_public_score": 0.957,
-      "submission_ref": 57424726,
-      "submitted_at_utc": "2026-10-20T06:26:21.434823+00:00"
+      "sha256": "56172847949eec2070bd4842f43c3b8f8aeee5ce69460cb3cda0d231c69be26d",
+      "source_kernel_ref": "mayankraaz/rsna-knee-abnormality-pipeline/7",
+      "source_public_score": 0.956,
+      "submission_ref": 57468523,
+      "submitted_at_utc": "2026-10-21T06:30:18.833925+00:00"
     }
   ],
   "rejected_sources": [
@@ -1692,6 +1692,23 @@
       "source_public_score": 0.95,
       "submission_ref": 57384810,
       "submitted_at_utc": "2026-10-19T06:28:11.247679+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-la-1eb1a85d9c",
+      "kernel_version": "1",
+      "message": "AUTO public kernel laimerbotrolenk/rsna-four-model-ensemble/1 file submission.csv",
+      "public_score": "0.957",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-10-21T05:48:56.137773+00:00",
+      "scoring_status": "complete",
+      "sha256": "3a0186159f91cb620bb5abecf5f7fe0325fa024b69d3c5138eb2aef34f67e43a",
+      "source_kernel_ref": "laimerbotrolenk/rsna-four-model-ensemble/1",
+      "source_public_score": 0.957,
+      "submission_ref": 57424726,
+      "submitted_at_utc": "2026-10-20T06:26:21.434823+00:00"
     }
   ]
 }
