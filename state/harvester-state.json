@@ -70,22 +70,6 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
-    },
-    {
-      "competition": "rsna-knee-abnormality-detection",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ma-b1d7f8c308",
-      "kernel_version": "1",
-      "message": "AUTO public kernel mayankraaz/rsna-knee-abnormality-pipeline/7 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 2,
-      "scoring_status": "pending",
-      "sha256": "56172847949eec2070bd4842f43c3b8f8aeee5ce69460cb3cda0d231c69be26d",
-      "source_kernel_ref": "mayankraaz/rsna-knee-abnormality-pipeline/7",
-      "source_public_score": 0.956,
-      "submission_ref": 57468523,
-      "submitted_at_utc": "2026-10-21T06:30:18.833925+00:00"
     }
   ],
   "rejected_sources": [
@@ -379,6 +363,24 @@
       "reason": "Kernel run failed with status error\nKaggle reported a terminal failure.\nKaggle kernel log tail:\n... (log truncated) ...\nput-aliases/06-resnet-50-radimagenet-marwan -\\u003e /kaggle/input/resnet-50-radimagenet-marwan\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674928987,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/02-raptor-knee-native384 -\\u003e /kaggle/input/raptor-knee-native384\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674937796,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/01-raptor-knee-maxspan -\\u003e /kaggle/input/raptor-knee-maxspan\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674940858,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/04-knee-mri-fold-weights -\\u003e /kaggle/input/knee-mri-fold-weights\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674943452,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/16-dinov2 -\\u003e /kaggle/input/models/metaresearch/dinov2/pytorch/small/1\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674946483,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/17-rsna-knee-e11-train -\\u003e /kaggle/input/rsna-knee-e11-train\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674949032,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/18-rsna-knee-e13-train -\\u003e /kaggle/input/rsna-knee-e13-train\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674961634,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/12-rsna-knee-llm-labels -\\u003e /kaggle/input/rsna-knee-llm-labels\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674965285,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/14-rsna-knee-weights -\\u003e /kaggle/input/rsna-knee-weights\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674967867,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/15-dinov2 -\\u003e /kaggle/input/models/metaresearch/dinov2/pytorch/base/1\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.674970424,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/00-rsna-knee-abnormality-detection -\\u003e /kaggle/input/rsna-knee-abnormality-detection\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.735580695,\"data\":\"[v6] preset=v6a  space=probit  family=prob_logit_half  outer=flat3  base_coat_w=0.620  private_alpha=0.400\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.740460908,\"data\":\"[v6] raptor arm weights: parent\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.74233033,\"data\":\"[v6] 18 attachments under /kaggle/input:\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.743435031,\"data\":\"       knee-mri-fold-weights\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.744196639,\"data\":\"       models\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.74533715,\"data\":\"       opencv-python-headless-4120088-x86\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.746440791,\"data\":\"       raptor-knee-maxspan\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.747610162,\"data\":\"       raptor-knee-native384\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.748634073,\"data\":\"       raptor-knee-native384dense\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.749785257,\"data\":\"       resnet-50-radimagenet-marwan\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.750886807,\"data\":\"       rsna-knee-abnormality-detection\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.752103149,\"data\":\"       rsna-knee-coat-resgated-ep10-top3\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.753237601,\"data\":\"       rsna-knee-coatnet-d4-depthzone-swa3-b2\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.754112254,\"data\":\"       rsna-knee-coatnet-global96-top3\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.755003047,\"data\":\"       rsna-knee-e11-diverse-heads-v20\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.755971508,\"data\":\"       rsna-knee-e11-train\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.756840144,\"data\":\"       rsna-knee-e13-train\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.757987192,\"data\":\"       rsna-knee-e9-radimagenet-heads-v15\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.759071739,\"data\":\"       rsna-knee-llm-labels\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.760225746,\"data\":\"       rsna-knee-v52-radimagenet-heads-20260812\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.761409873,\"data\":\"       rsna-knee-weights\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.762548387,\"data\":\"[v6] ASSET_ROOTS: 33 of 34 paths exist (the list carries two spellings per dataset, so about half are expected to be absent)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.766948357,\"data\":\"[v6] datasets named in ASSET_ROOTS with NO path on disk: 1\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.76791704,\"data\":\"[v6] if a CoAt member or head set lives in one of those, attach it before running; the SHA-pinned fallback can only find something that is mounted somewhere.\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.768966404,\"data\":\"[v6] control panel ready; SHA-pinned global asset fallback ENABLED\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.810051745,\"data\":\"cuda:0 probe PASS (compute 7.5)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.851606767,\"data\":\"cuda:1 probe PASS (compute 7.5)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.851659894,\"data\":\"devices: ['cuda:0', 'cuda:1']\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.8516638,\"data\":\"[startup] imports+GPU preflight: 8.90s\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.929215308,\"data\":\"[    0.1s] input root: /tmp/kaggle-input-aliases/00-rsna-knee-abnormality-detection\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":19.930394134,\"data\":\"[startup] competition-root preflight: 0.08s\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":20.429294721,\"data\":\"[    0.6s] memory: 29.5 GB available, 13.3 GB to the cache; sizing for 4407 train + 1322 test studies -\\u003e 1 group(s) of 3 = 3 slices per slot\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":20.430430616,\"data\":\"[    0.6s] cache layout: 1 groups x 3 slices = 3 per slot\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":22.649184373,\"data\":\"[phase] {\\\"a5_without_matching_acquisition\\\": 0, \\\"elapsed_seconds\\\": 2.7971551418304443, \\\"gpus\\\": [{\\\"allocated_bytes\\\": 0, \\\"id\\\": 0, \\\"reserved_bytes\\\": 0}, {\\\"allocated_bytes\\\": 0, \\\"id\\\": 1, \\\"reserved_bytes\\\": 0}], \\\"max_rss_kib\\\": 1037884, \\\"memory.current\\\": \\\"1419505664\\\", \\\"memory.max\\\": \\\"32212254720\\\", \\\"missing_fluid_flags\\\": 0, \\\"stage\\\": \\\"input_metadata\\\", \\\"status\\\": \\\"COMPLETE\\\"}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":23.397251347,\"data\":\"[phase] {\\\"elapsed_seconds\\\": 3.545666217803955, \\\"gpus\\\": [{\\\"allocated_bytes\\\": 0, \\\"id\\\": 0, \\\"reserved_bytes\\\": 0}, {\\\"allocated_bytes\\\": 0, \\\"id\\\": 1, \\\"reserved_bytes\\\": 0}], \\\"max_rss_kib\\\": 1037884, \\\"memory.current\\\": \\\"1429155840\\\", \\\"memory.max\\\": \\\"32212254720\\\", \\\"stage\\\": \\\"dinov2\\\", \\\"status\\\": \\\"START\\\"}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":23.485279058,\"data\":\"[phase] {\\\"elapsed_seconds\\\": 3.633636236190796, \\\"error\\\": \\\"expected one pinned rsna-knee-weights root, found [PosixPath('/tmp/kaggle-input-aliases/14-rsna-knee-weights'), PosixPath('/tmp/kaggle-input-aliases/14-rsna-knee-weights')]\\\", \\\"error_type\\\": \\\"WeightsError\\\", \\\"gpus\\\": [{\\\"allocated_bytes\\\": 0, \\\"id\\\": 0, \\\"reserved_bytes\\\": 0}, {\\\"allocated_bytes\\\": 0, \\\"id\\\": 1, \\\"reserved_bytes\\\": 0}], \\\"max_rss_kib\\\": 1037884, \\\"memory.current\\\": \\\"1429151744\\\", \\\"memory.max\\\": \\\"32212254720\\\", \\\"stage\\\": \\\"dinov2\\\", \\\"status\\\": \\\"FAILED\\\"}\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.087464831,\"data\":\"Traceback (most recent call last):\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088155835,\"data\":\"  File \\\"\\u003cstring\\u003e\\\", line 1, in \\u003cmodule\\u003e\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088168782,\"data\":\"    import sys;import papermill as pm;pm.execute_notebook(\\\"__notebook__.ipynb\\\",\\\"__notebook__.ipynb\\\",progress_bar=False,log_output=True,stdout_file=sys.stdout,stderr_file=sys.stderr,allow_errors=False,timeout=43200)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088177811,\"data\":\"                                      ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088180806,\"data\":\"  File \\\"/usr/local/lib/python3.13/dist-packages/papermill/execute.py\\\", line 131, in execute_notebook\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088183567,\"data\":\"    raise_for_execution_errors(nb, output_path)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088185907,\"data\":\"    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088188769,\"data\":\"  File \\\"/usr/local/lib/python3.13/dist-packages/papermill/execute.py\\\", line 251, in raise_for_execution_errors\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088191387,\"data\":\"    raise error\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088205065,\"data\":\"papermill.exceptions.PapermillExecutionError: \\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088207893,\"data\":\"---------------------------------------------------------------------------\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088210256,\"data\":\"Exception encountered at \\\"In [17]\\\":\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088213536,\"data\":\"---------------------------------------------------------------------------\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088262765,\"data\":\"WeightsError                              Traceback (most recent call last)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088268297,\"data\":\"/tmp/ipykernel_23/1965562819.py in \\u003ccell line: 0\\u003e()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088272855,\"data\":\"      1 rsna_phase('dinov2', 'START')\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088276653,\"data\":\"----\\u003e 2 main()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088280154,\"data\":\"      3 log('done')\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088283497,\"data\":\"      4 \\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088286904,\"data\":\"      5 _speed_dino_templates.clear()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088290346,\"data\":\"\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088293645,\"data\":\"/tmp/ipykernel_23/184521434.py in main()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08829719,\"data\":\"     24 \\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088302287,\"data\":\"     25 def main():\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08830946,\"data\":\"---\\u003e 26     pkg = find_weights()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088311931,\"data\":\"     27     if pkg is None:\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08831562,\"data\":\"     28         raise WeightsError('required public checkpoint manifest not found')\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088332489,\"data\":\"\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088336419,\"data\":\"/tmp/ipykernel_23/1986146183.py in find_weights(name)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088340905,\"data\":\"    505         valid.append(root)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088345093,\"data\":\"    506     if len(valid) != 1:\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08834911,\"data\":\"--\\u003e 507         raise WeightsError(f'expected one pinned rsna-knee-weights root, found {valid}')\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088353035,\"data\":\"    508     return valid[0]\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08835648,\"data\":\"    509 TTA_OVERLAP = True\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.08835984,\"data\":\"\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088363253,\"data\":\"WeightsError: expected one pinned rsna-knee-weights root, found [PosixPath('/tmp/kaggle-input-aliases/14-rsna-knee-weights'), PosixPath('/tmp/kaggle-input-aliases/14-rsna-knee-weights')]\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":27.088367269,\"data\":\"\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":29.64869423,\"data\":\"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\\\|'\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":29.648723864,\"data\":\"  cells[i][c] = re.sub('\\\\\\\\\\\\\\\\\\\\|', '|', cell)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":29.819097333,\"data\":\"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\\\_'\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":29.819121625,\"data\":\"  text = re.sub(r'_', '\\\\_', text) # Escape underscores in display text\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":30.707119982000002,\"data\":\"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":30.83678559,\"data\":\"[NbConvertApp] Writing 401238 bytes to __notebook__.ipynb\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":33.722354085,\"data\":\"[NbConvertApp] Converting notebook __notebook__.ipynb to html\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":35.611804284,\"data\":\"[NbConvertApp] Writing 1722422 bytes to __results__.html\\n\"}\n]",
       "rejected_at_utc": "2026-10-17T05:25:14.840887+00:00",
       "source_kernel_ref": "lavinwins/rsna-gold-medal/6"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "rejected_at_utc": "2026-10-22T05:54:44.650926+00:00",
+      "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "source_kernel_ref": "rabari9999/rsna-knee-sota-dual-engine-stack-lb-0-951/4"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "reason": "submission hash already attempted: 381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "rejected_at_utc": "2026-10-22T05:57:51.799439+00:00",
+      "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
+      "source_kernel_ref": "rabari9999/rsna-knee-lb-0-95/4"
     }
   ],
   "schema_version": 1,
@@ -1709,6 +1711,39 @@
       "source_public_score": 0.957,
       "submission_ref": 57424726,
       "submitted_at_utc": "2026-10-20T06:26:21.434823+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ma-b1d7f8c308",
+      "kernel_version": "1",
+      "message": "AUTO public kernel mayankraaz/rsna-knee-abnormality-pipeline/7 file submission.csv",
+      "public_score": "0.956",
+      "scan_rank": 2,
+      "scored_at_utc": "2026-10-22T05:51:37.223767+00:00",
+      "scoring_status": "complete",
+      "sha256": "56172847949eec2070bd4842f43c3b8f8aeee5ce69460cb3cda0d231c69be26d",
+      "source_kernel_ref": "mayankraaz/rsna-knee-abnormality-pipeline/7",
+      "source_public_score": 0.956,
+      "submission_ref": 57468523,
+      "submitted_at_utc": "2026-10-21T06:30:18.833925+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-na-7a1966b536",
+      "kernel_version": "1",
+      "message": "AUTO public kernel nartaa/rsna-knee-0945-efficient-224crop/2 file submission.csv",
+      "scan_rank": 3,
+      "scoring_status": "complete",
+      "sha256": "c12958fba2378e477d477908b57b87ee9b9fed690ea128d75498b2f18efee799",
+      "source_file_name": "submission.csv",
+      "source_kernel_ref": "nartaa/rsna-knee-0945-efficient-224crop/2",
+      "source_public_score": 0.945,
+      "submission_ref": 57512210,
+      "submitted_at_utc": "2026-10-22T06:14:57.983135+00:00"
     }
   ]
 }
