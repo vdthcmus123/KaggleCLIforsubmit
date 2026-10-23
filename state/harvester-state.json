@@ -1744,6 +1744,22 @@
       "source_public_score": 0.945,
       "submission_ref": 57512210,
       "submitted_at_utc": "2026-10-22T06:14:57.983135+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-mm-7e72d409f7",
+      "kernel_version": "1",
+      "message": "AUTO public kernel mmuratgunes/final/38 file submission.csv",
+      "scan_rank": 6,
+      "scoring_status": "complete",
+      "sha256": "0dcdb390fa86563329de455b59cf8531f2bf063fcc32e457701b7c626f15f0eb",
+      "source_file_name": "submission.csv",
+      "source_kernel_ref": "mmuratgunes/final/38",
+      "source_public_score": 0.705,
+      "submission_ref": 57550823,
+      "submitted_at_utc": "2026-10-23T06:06:30.639095+00:00"
     }
   ]
 }
