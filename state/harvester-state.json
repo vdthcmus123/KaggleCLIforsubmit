@@ -75,17 +75,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-he-15e387137e",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ch-8ed0872895",
       "kernel_version": "1",
-      "message": "AUTO public kernel heliosli/rsna-knee-last-submission/3 file submission.csv",
+      "message": "AUTO public kernel chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 8,
+      "scan_rank": 3,
       "scoring_status": "pending",
-      "sha256": "b6d7cbedbf2a4f704a495787803dbc521a02486bf4df635b9a2fcdc9f4ee086b",
-      "source_kernel_ref": "heliosli/rsna-knee-last-submission/3",
-      "source_public_score": 0.959,
-      "submission_ref": 57583968,
-      "submitted_at_utc": "2026-10-24T06:11:57.404031+00:00"
+      "sha256": "2c0778e6e543ddcf1d4b37810982069a52cd3737a0c861a06499dcfc812ad286",
+      "source_kernel_ref": "chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3",
+      "source_public_score": 0.955,
+      "submission_ref": 57618690,
+      "submitted_at_utc": "2026-10-25T06:21:22.104007+00:00"
     }
   ],
   "rejected_sources": [
@@ -1776,6 +1776,23 @@
       "source_public_score": 0.705,
       "submission_ref": 57550823,
       "submitted_at_utc": "2026-10-23T06:06:30.639095+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-he-15e387137e",
+      "kernel_version": "1",
+      "message": "AUTO public kernel heliosli/rsna-knee-last-submission/3 file submission.csv",
+      "public_score": "0.959",
+      "scan_rank": 8,
+      "scored_at_utc": "2026-10-25T05:49:04.693177+00:00",
+      "scoring_status": "complete",
+      "sha256": "b6d7cbedbf2a4f704a495787803dbc521a02486bf4df635b9a2fcdc9f4ee086b",
+      "source_kernel_ref": "heliosli/rsna-knee-last-submission/3",
+      "source_public_score": 0.959,
+      "submission_ref": 57583968,
+      "submitted_at_utc": "2026-10-24T06:11:57.404031+00:00"
     }
   ]
 }
