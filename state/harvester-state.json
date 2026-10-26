@@ -52,6 +52,22 @@
       "source_kernel_ref": "boristown/dark-agi-biohub-cell-tracking-solution/7",
       "submission_ref": 54837651,
       "submitted_at_utc": "2026-07-19T19:10:14.247076+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ch-8ed0872895",
+      "kernel_version": "1",
+      "message": "AUTO public kernel chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3 file submission.csv",
+      "scan_rank": 3,
+      "scoring_error": "A system error. Please try resubmitting to resolve the error and contact Kaggle Support if it persists.",
+      "scoring_status": "error",
+      "sha256": "2c0778e6e543ddcf1d4b37810982069a52cd3737a0c861a06499dcfc812ad286",
+      "source_kernel_ref": "chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3",
+      "source_public_score": 0.955,
+      "submission_ref": 57618690,
+      "submitted_at_utc": "2026-10-25T06:21:22.104007+00:00"
     }
   ],
   "pending_submissions": [
@@ -70,22 +86,6 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
-    },
-    {
-      "competition": "rsna-knee-abnormality-detection",
-      "execution_mode": "competition-code-score-copy-v3",
-      "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ch-8ed0872895",
-      "kernel_version": "1",
-      "message": "AUTO public kernel chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3 file submission.csv",
-      "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 3,
-      "scoring_status": "pending",
-      "sha256": "2c0778e6e543ddcf1d4b37810982069a52cd3737a0c861a06499dcfc812ad286",
-      "source_kernel_ref": "chengtingyi/single-model-nfnet384-opus-astra-llm-labels/3",
-      "source_public_score": 0.955,
-      "submission_ref": 57618690,
-      "submitted_at_utc": "2026-10-25T06:21:22.104007+00:00"
     }
   ],
   "rejected_sources": [
@@ -1793,6 +1793,22 @@
       "source_public_score": 0.959,
       "submission_ref": 57583968,
       "submitted_at_utc": "2026-10-24T06:11:57.404031+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ta-a892fbc4dc",
+      "kernel_version": "1",
+      "message": "AUTO public kernel tascj0/knee-eff-trt-l/2 file submission.csv",
+      "scan_rank": 7,
+      "scoring_status": "complete",
+      "sha256": "15149c3a02b6077d40e1b51f3e14f2e374f85fdb9ef936d47941ef36ab0bdfe4",
+      "source_file_name": "submission.csv",
+      "source_kernel_ref": "tascj0/knee-eff-trt-l/2",
+      "source_public_score": 0.964,
+      "submission_ref": 57655558,
+      "submitted_at_utc": "2026-10-26T05:58:31.057136+00:00"
     }
   ]
 }
