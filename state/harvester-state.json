@@ -86,6 +86,22 @@
       "source_public_score": 0.946,
       "submission_ref": 56768601,
       "submitted_at_utc": "2026-10-02T07:58:53.052692+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-va-b16f559d65",
+      "kernel_version": "1",
+      "message": "AUTO public kernel varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1 file submission.csv",
+      "pending_reason": "timed out after 1800s waiting for final scoring",
+      "scan_rank": 5,
+      "scoring_status": "pending",
+      "sha256": "8e634be324e0caf37f959ad76e486e95ee1b84ec28e1a721f538381fcbf122d4",
+      "source_kernel_ref": "varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1",
+      "source_public_score": 0.956,
+      "submission_ref": 57691432,
+      "submitted_at_utc": "2026-10-27T06:45:16.666233+00:00"
     }
   ],
   "rejected_sources": [
