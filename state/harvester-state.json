@@ -91,17 +91,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-va-b16f559d65",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ba-257944932f",
       "kernel_version": "1",
-      "message": "AUTO public kernel varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1 file submission.csv",
+      "message": "AUTO public kernel basselashraf/rsna-knee-abnormality-detection/35 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 5,
+      "scan_rank": 1,
       "scoring_status": "pending",
-      "sha256": "8e634be324e0caf37f959ad76e486e95ee1b84ec28e1a721f538381fcbf122d4",
-      "source_kernel_ref": "varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1",
-      "source_public_score": 0.956,
-      "submission_ref": 57691432,
-      "submitted_at_utc": "2026-10-27T06:45:16.666233+00:00"
+      "sha256": "31264f71a3b1ca6208dcb860aa57decb08aba2a6cd4745054135760fb056eaf9",
+      "source_kernel_ref": "basselashraf/rsna-knee-abnormality-detection/35",
+      "source_public_score": 0.958,
+      "submission_ref": 57727977,
+      "submitted_at_utc": "2026-10-28T07:23:18.393963+00:00"
     }
   ],
   "rejected_sources": [
@@ -1825,6 +1825,23 @@
       "source_public_score": 0.964,
       "submission_ref": 57655558,
       "submitted_at_utc": "2026-10-26T05:58:31.057136+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-va-b16f559d65",
+      "kernel_version": "1",
+      "message": "AUTO public kernel varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1 file submission.csv",
+      "public_score": "0.956",
+      "scan_rank": 5,
+      "scored_at_utc": "2026-10-28T06:42:54.910018+00:00",
+      "scoring_status": "complete",
+      "sha256": "8e634be324e0caf37f959ad76e486e95ee1b84ec28e1a721f538381fcbf122d4",
+      "source_kernel_ref": "varshithakolupuri/rsna-0-956-one-free-flip-68-ranks-up/1",
+      "source_public_score": 0.956,
+      "submission_ref": 57691432,
+      "submitted_at_utc": "2026-10-27T06:45:16.666233+00:00"
     }
   ]
 }
