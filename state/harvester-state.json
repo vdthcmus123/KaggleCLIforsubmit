@@ -91,17 +91,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ba-257944932f",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-wa-b028427869",
       "kernel_version": "1",
-      "message": "AUTO public kernel basselashraf/rsna-knee-abnormality-detection/35 file submission.csv",
+      "message": "AUTO public kernel wadakoki/rsna-knee-inference-v1/73 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 1,
+      "scan_rank": 5,
       "scoring_status": "pending",
-      "sha256": "31264f71a3b1ca6208dcb860aa57decb08aba2a6cd4745054135760fb056eaf9",
-      "source_kernel_ref": "basselashraf/rsna-knee-abnormality-detection/35",
-      "source_public_score": 0.958,
-      "submission_ref": 57727977,
-      "submitted_at_utc": "2026-10-28T07:23:18.393963+00:00"
+      "sha256": "ff91e08aa3d054d28630a365c9e2cdf207c64be1cdfad0ae3ffbc78477e5da60",
+      "source_kernel_ref": "wadakoki/rsna-knee-inference-v1/73",
+      "source_public_score": 0.968,
+      "submission_ref": 57762227,
+      "submitted_at_utc": "2026-10-29T07:26:33.849353+00:00"
     }
   ],
   "rejected_sources": [
@@ -413,6 +413,13 @@
       "rejected_at_utc": "2026-10-22T05:57:51.799439+00:00",
       "sha256": "381253ef942b8f7da0488b13f9e6aabed6a9b660ae40e68b17533a9eba14b37b",
       "source_kernel_ref": "rabari9999/rsna-knee-lb-0-95/4"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "reason": "Kernel run failed with status error\nKaggle reported a terminal failure.\nKaggle kernel log tail:\n[{\"stream_name\":\"stdout\",\"time\":0.958546365,\"data\":\"Kaggle input alias: /tmp/kaggle-input-aliases/00-rsna-knee-abnormality-detection -\\u003e /kaggle/input/competitions/rsna-knee-abnormality-detection\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":0.971364813,\"data\":\"[t   0.00] start\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":1.129413382,\"data\":\"knee from /tmp/src_overlay\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":1.524155794,\"data\":\"[t   0.56] walk of /kaggle/input: 14 folders in 0.3 s\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":4.79040374,\"data\":\"early: 8 lean workers on 3 studies (rings 10240 MB), started in 0.2 s (spec 512px_24sl_110mm_0.15-0.85_x150mm, C True)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":4.81569711,\"data\":\"[t   3.84] early pool started\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":5.617201846,\"data\":\"[t   4.65] read-ahead: 11 files, 125 MB, 0 errors, in 4.6 s; groups [('knee-wheels', 1.3), ('knee-runs-376-384-full-data-v9j-287-img512', 4.6)]\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":9.771686927,\"data\":\"early: decoders after the fork from /kaggle/input/datasets/marcoledda29/knee-wheels in 5.0 s: {'pylibjpeg': True, 'libjpeg': True, 'openjpeg': True, 'gdcm': True}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":10.204952425,\"data\":\"[t   9.24] read-ahead: 73 files, 735 MB, 0 errors, in 9.1 s; groups [('knee-repack-dense8s-t8x32-376x2j', 0.9), ('knee-trt-runtime-cp313', 9.1)]\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.119295141,\"data\":\"[t  10.15] import knee.infer\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.120347253,\"data\":\"decoders from /kaggle/input/datasets/marcoledda29/knee-wheels: {'pylibjpeg': True, 'libjpeg': True, 'openjpeg': True, 'gdcm': True}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.121309945,\"data\":\"competition mount: /kaggle/input/competitions/rsna-knee-abnormality-detection | checkpoints from /kaggle/input/datasets/marcoledda29/knee-runs-376-384-full-data-v9j-287-img512 | compilation cache: None\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.121423537,\"data\":\"flip-free TTA: ['s1.10'] (1 passes per study)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.121435285,\"data\":\"encoder: eager, compilation off\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.12483636,\"data\":\"engines d8s376x2j from /kaggle/input/notebooks/marcoledda29/knee-repack-dense8s-t8x32-376x2j/dense8s-runtime, TensorRT runtime /kaggle/input/notebooks/marcoledda29/knee-trt-runtime-cp313/trt_runtime (needed)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.124861293,\"data\":\"windows per member: design parx, 8 studies per GPU per batch\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.394229526,\"data\":\"CUDA context in blocking sync: {0: {'rc': 0, 'flags': 4, 'active': 0, 'blocking': True}, 1: {'rc': 0, 'flags': 4, 'active': 0, 'blocking': True}}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.45749194,\"data\":\"device: Tesla T4 (sm_75)\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.457996384,\"data\":\"fast decoding kernels: {'c': {'error': None, 'build_s': 0.02, 'how': 'already compiled', 'ok': True}, 'ok': True}\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":11.464837998,\"data\":\"3 studies, 15 series\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":12.166852637,\"data\":\"head-only: load deferred=2/2 encoder_parameters=0 cpu_payloads=2\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":12.167118752,\"data\":\"2 folds from /kaggle/input/datasets/marcoledda29/knee-runs-376-384-full-data-v9j-287-img512: fold0.pt, fold1.pt\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":12.16713237,\"data\":\"run 384-full-data-v9j-287-img512-s43 | spec 512px_24sl_110mm_0.15-0.85_x150mm | 88 windows per study (stride 2) | checkpoints in 0.7s\\n\"}\n,{\"stream_name\":\"stdout\",\"time\":12.252956506,\"data\":\"preflight: 0.0% decoding failures in 0.1s\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.253370259,\"data\":\"Traceback (most recent call last):\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254707497,\"data\":\"  File \\\"/kaggle/src/script.py\\\", line 584, in \\u003cmodule\\u003e\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254757814,\"data\":\"    main()\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254763786,\"data\":\"    ~~~~^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254768197,\"data\":\"  File \\\"/kaggle/src/script.py\\\", line 562, in main\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254772114,\"data\":\"    run_submission(root, ckpt, OUT,\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254775809,\"data\":\"    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254779597,\"data\":\"                   batch_size=BATCH if budget is None else BUDGET_BATCH.get(budget, BATCH),\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.25478364,\"data\":\"                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254788087,\"data\":\"    ...\\u003c9 lines\\u003e...\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254791786,\"data\":\"                   budget=budget,\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254795514,\"data\":\"                   ^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254799134,\"data\":\"                   gpu_resize=GPU_RESIZE != 'cpu-resize')\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.25480363,\"data\":\"                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254807836,\"data\":\"  File \\\"/tmp/src_overlay/knee/infer.py\\\", line 2353, in run_submission\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254812002,\"data\":\"    fallback=spec.slot_fallback)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254837019,\"data\":\"             ^^^^^^^^^^^^^^^^^^\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":12.254841169,\"data\":\"AttributeError: 'CacheSpec' object has no attribute 'slot_fallback'\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":17.459898962,\"data\":\"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\\\|'\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":17.45992803,\"data\":\"  cells[i][c] = re.sub('\\\\\\\\\\\\\\\\\\\\|', '|', cell)\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":17.801657949,\"data\":\"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\\\_'\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":17.801685272,\"data\":\"  text = re.sub(r'_', '\\\\_', text) # Escape underscores in display text\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":19.596282217,\"data\":\"[NbConvertApp] Converting notebook __script__.ipynb to html\\n\"}\n,{\"stream_name\":\"stderr\",\"time\":20.890868344,\"data\":\"[NbConvertApp] Writing 1061686 bytes to __results__.html\\n\"}\n]",
+      "rejected_at_utc": "2026-10-29T06:51:24.526693+00:00",
+      "source_kernel_ref": "marcoledda29/ks-376-384-v9j-512-lean-tta-p2z110t0-li/2"
     }
   ],
   "schema_version": 1,
@@ -1842,6 +1849,23 @@
       "source_public_score": 0.956,
       "submission_ref": 57691432,
       "submitted_at_utc": "2026-10-27T06:45:16.666233+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-ba-257944932f",
+      "kernel_version": "1",
+      "message": "AUTO public kernel basselashraf/rsna-knee-abnormality-detection/35 file submission.csv",
+      "public_score": "0.958",
+      "scan_rank": 1,
+      "scored_at_utc": "2026-10-29T06:50:20.088519+00:00",
+      "scoring_status": "complete",
+      "sha256": "31264f71a3b1ca6208dcb860aa57decb08aba2a6cd4745054135760fb056eaf9",
+      "source_kernel_ref": "basselashraf/rsna-knee-abnormality-detection/35",
+      "source_public_score": 0.958,
+      "submission_ref": 57727977,
+      "submitted_at_utc": "2026-10-28T07:23:18.393963+00:00"
     }
   ]
 }
