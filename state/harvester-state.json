@@ -91,17 +91,17 @@
       "competition": "rsna-knee-abnormality-detection",
       "execution_mode": "competition-code-score-copy-v3",
       "file_name": "submission.csv",
-      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-wa-b028427869",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-de-2c8314dea2",
       "kernel_version": "1",
-      "message": "AUTO public kernel wadakoki/rsna-knee-inference-v1/73 file submission.csv",
+      "message": "AUTO public kernel dennis6886/rsna-knee-0-958-raptor-and-s6all-rank-fusion/2 file submission.csv",
       "pending_reason": "timed out after 1800s waiting for final scoring",
-      "scan_rank": 5,
+      "scan_rank": 2,
       "scoring_status": "pending",
-      "sha256": "ff91e08aa3d054d28630a365c9e2cdf207c64be1cdfad0ae3ffbc78477e5da60",
-      "source_kernel_ref": "wadakoki/rsna-knee-inference-v1/73",
-      "source_public_score": 0.968,
-      "submission_ref": 57762227,
-      "submitted_at_utc": "2026-10-29T07:26:33.849353+00:00"
+      "sha256": "602dca9737ff93e3d3f9494921440cd98bc5a113f4c133fe2843231c95481fbe",
+      "source_kernel_ref": "dennis6886/rsna-knee-0-958-raptor-and-s6all-rank-fusion/2",
+      "source_public_score": 0.958,
+      "submission_ref": 57796773,
+      "submitted_at_utc": "2026-10-30T07:35:51.520120+00:00"
     }
   ],
   "rejected_sources": [
@@ -1866,6 +1866,23 @@
       "source_public_score": 0.958,
       "submission_ref": 57727977,
       "submitted_at_utc": "2026-10-28T07:23:18.393963+00:00"
+    },
+    {
+      "competition": "rsna-knee-abnormality-detection",
+      "execution_mode": "competition-code-score-copy-v3",
+      "file_name": "submission.csv",
+      "kernel_ref": "envyy23120093/auto-rsna-knee-abnormality-detection-wa-b028427869",
+      "kernel_version": "1",
+      "message": "AUTO public kernel wadakoki/rsna-knee-inference-v1/73 file submission.csv",
+      "public_score": "0.968",
+      "scan_rank": 5,
+      "scored_at_utc": "2026-10-30T06:54:28.524358+00:00",
+      "scoring_status": "complete",
+      "sha256": "ff91e08aa3d054d28630a365c9e2cdf207c64be1cdfad0ae3ffbc78477e5da60",
+      "source_kernel_ref": "wadakoki/rsna-knee-inference-v1/73",
+      "source_public_score": 0.968,
+      "submission_ref": 57762227,
+      "submitted_at_utc": "2026-10-29T07:26:33.849353+00:00"
     }
   ]
 }
